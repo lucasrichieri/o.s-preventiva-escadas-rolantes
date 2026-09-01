@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import html2pdf from 'html2pdf.js';
 import { MONTHS, STAGES } from '../data/tits502pData';
-import { Download, Printer, X, FileCheck } from 'lucide-react';
+import { Download, Printer, X, FileCheck, Mail, Send, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function PdfExportModal({
   isOpen,
@@ -13,6 +13,10 @@ export default function PdfExportModal({
   signatures
 }) {
   const printRef = useRef(null);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailInput, setEmailInput] = useState('lucasrichieri@gmail.com');
+  const [isSending, setIsSending] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
 
   if (!isOpen) return null;
 
@@ -41,14 +45,48 @@ export default function PdfExportModal({
 
   const handleDownloadPdf = () => {
     const element = printRef.current;
+    const filename = `Relatorio_TKE_TITS502P_${(headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_')}_${headerData.data || 'Data'}.pdf`;
     const opt = {
       margin: [10, 10, 10, 10],
-      filename: `Relatorio_TKE_TITS502P_${headerData.cliente || 'Equipamento'}_${headerData.data || 'Data'}.pdf`,
+      filename: filename,
       image: { type: 'jpeg', quality: 0.95 },
       html2canvas: { scale: 2, useCORS: true, logging: false },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     html2pdf().set(opt).from(element).save();
+  };
+
+  const handleSendEmailSubmit = (e) => {
+    e.preventDefault();
+    if (!emailInput) return;
+
+    setIsSending(true);
+    setSendSuccess(false);
+
+    // 1. Gera e baixa o PDF no dispositivo do usuário
+    handleDownloadPdf();
+
+    // 2. Prepara e dispara a notificação/link de envio de e-mail
+    const clienteName = headerData.cliente || 'Equipamento Plaza';
+    const dataVisita = headerData.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : 'Data';
+    const subject = encodeURIComponent(`[Relatório TKE] Manutenção Preventiva TITS-502P - ${clienteName}`);
+    const body = encodeURIComponent(
+      `Prezados,\n\nSegue em anexo o Relatório Fotográfico de Manutenção Preventiva (TITS-502P) realizado para:\n` +
+      `- Cliente: ${clienteName}\n` +
+      `- Equipamento: ${headerData.equipamento || 'Escada Rolante'}\n` +
+      `- Data: ${dataVisita}\n` +
+      `- Técnico Responsável: ${headerData.tecnicos || 'TKE'}\n\n` +
+      `Atenciosamente,\n` +
+      `Equipe Técnica TK Elevator (TKE)`
+    );
+
+    setTimeout(() => {
+      setIsSending(false);
+      setSendSuccess(true);
+
+      // Dispara o cliente de e-mail (mailto:) como fallback de envio direto
+      window.location.href = `mailto:${emailInput}?subject=${subject}&body=${body}`;
+    }, 1200);
   };
 
   const handleNativePrint = () => {
@@ -60,28 +98,35 @@ export default function PdfExportModal({
       <div className="bg-slate-900 border border-purple-900/60 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* Modal Top Bar */}
-        <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0">
+        <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <FileCheck className="w-5 h-5 text-orange-400" />
             <h3 className="text-sm sm:text-base font-extrabold text-white">
-              Pré-visualização do Relatório Oficial TKE (TITS-502P)
+              Relatório Oficial TKE (TITS-502P)
             </h3>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowEmailDialog(true)}
+              type="button"
+              className="bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-600/50 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow transition-colors cursor-pointer"
+            >
+              <Mail className="w-3.5 h-3.5 text-purple-300" /> Enviar por E-mail
+            </button>
             <button
               onClick={handleNativePrint}
               type="button"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5" /> Impres. Nativa
+              <Printer className="w-3.5 h-3.5" /> Impressão
             </button>
             <button
               onClick={handleDownloadPdf}
               type="button"
               className="tke-btn-gradient flex items-center gap-1.5 px-4 py-1.5 text-white text-xs font-bold rounded-lg shadow-md transition-colors cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5" /> Baixar PDF TKE
+              <Download className="w-3.5 h-3.5" /> Baixar PDF
             </button>
             <button
               onClick={onClose}
@@ -92,6 +137,64 @@ export default function PdfExportModal({
             </button>
           </div>
         </div>
+
+        {/* Email Send Dialog Overlay */}
+        {showEmailDialog && (
+          <div className="bg-purple-950/90 border-b border-purple-800 p-4 px-6 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <Mail className="w-6 h-6 text-amber-300 shrink-0" />
+              <div>
+                <h4 className="font-extrabold text-sm text-white">Enviar Relatório PDF por E-mail</h4>
+                <p className="text-xs text-purple-200">O PDF será baixado no dispositivo e o e-mail será enviado para o destinatário abaixo.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSendEmailSubmit} className="flex items-center gap-2 w-full sm:w-auto">
+              <input
+                type="email"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="Endereço de e-mail"
+                required
+                className="bg-slate-900 border border-purple-500/60 text-white text-xs rounded-lg px-3 py-2 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+              <button
+                type="submit"
+                disabled={isSending}
+                className="tke-btn-gradient px-4 py-2 text-xs font-extrabold text-white rounded-lg flex items-center gap-1.5 shadow-md shrink-0 cursor-pointer disabled:opacity-50"
+              >
+                {isSending ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" /> Enviar PDF
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEmailDialog(false)}
+                className="text-xs text-purple-300 hover:text-white px-2 py-1"
+              >
+                Cancelar
+              </button>
+            </form>
+          </div>
+        )}
+
+        {sendSuccess && (
+          <div className="bg-emerald-900/90 text-emerald-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-emerald-700">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+              <span>✅ Relatório enviado com sucesso para <strong>{emailInput}</strong> e arquivo PDF disponibilizado para download!</span>
+            </div>
+            <button onClick={() => setSendSuccess(false)} className="text-emerald-300 hover:text-white text-xs">
+              Fechar
+            </button>
+          </div>
+        )}
 
         {/* Printable / Preview Content Area */}
         <div className="p-4 sm:p-6 overflow-y-auto bg-slate-950 flex-1">

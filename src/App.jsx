@@ -7,7 +7,7 @@ import SignaturesSection from './components/SignaturesSection';
 import PdfExportModal from './components/PdfExportModal';
 
 import { ACTIVITIES, STAGES, MONTHS } from './data/tits502pData';
-import { Download, CheckCircle2 } from 'lucide-react';
+import { Download, CheckCircle2, Mail } from 'lucide-react';
 
 export default function App() {
   const currentDateStr = new Date().toISOString().split('T')[0];
@@ -174,13 +174,21 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => setIsPdfModalOpen(true)}
+            className="bg-purple-900/10 hover:bg-purple-900/20 text-purple-900 border border-purple-300 flex items-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-xl transition-colors cursor-pointer"
+          >
+            <Mail className="w-4 h-4 text-purple-700" />
+            Enviar por E-mail
+          </button>
+
           <button
             onClick={() => setIsPdfModalOpen(true)}
             className="tke-btn-gradient flex items-center gap-2 px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md cursor-pointer transform hover:-translate-y-0.5"
           >
             <Download className="w-4 h-4 text-amber-200" />
-            Gerar e Exportar PDF
+            Baixar PDF
           </button>
         </div>
       </header>
@@ -242,13 +250,21 @@ export default function App() {
         />
 
         {/* Bottom PDF Export Floating Trigger */}
-        <div className="flex justify-center pt-4 pb-12">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 pb-12">
+          <button
+            onClick={() => setIsPdfModalOpen(true)}
+            className="bg-purple-950 hover:bg-purple-900 text-white font-bold text-sm sm:text-base px-6 py-3.5 rounded-2xl shadow-lg border border-purple-800 flex items-center gap-2.5 transition-all cursor-pointer transform hover:-translate-y-0.5"
+          >
+            <Mail className="w-5 h-5 text-amber-300" />
+            Enviar PDF para lucasrichieri@gmail.com
+          </button>
+
           <button
             onClick={() => setIsPdfModalOpen(true)}
             className="tke-btn-gradient flex items-center gap-2.5 px-8 py-4 text-white font-extrabold text-base rounded-2xl shadow-xl transition-all cursor-pointer transform hover:-translate-y-1 active:translate-y-0"
           >
             <Download className="w-5 h-5 text-amber-200" />
-            Visualizar e Baixar Relatório Consolidador TKE em PDF
+            Visualizar e Baixar Relatório (PDF)
           </button>
         </div>
 
