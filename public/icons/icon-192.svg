@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bgGrad192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4c1d95"/>
+      <stop offset="50%" stop-color="#7e22ce"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="192" height="192" rx="48" fill="url(#bgGrad192)"/>
+  
+  <!-- Steps -->
+  <path d="M45 142 h30 l42 -60 h30" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- TKE Badge -->
+  <rect x="52" y="40" width="88" height="28" rx="8" fill="#0f172a" fill-opacity="0.9" stroke="#ea580c" stroke-width="2"/>
+  <text x="96" y="60" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="16" fill="#ffffff" text-anchor="middle" letter-spacing="2">
+    TK<tspan fill="#f97316">E</tspan>
+  </text>
+  
+  <!-- Subtitle -->
+  <rect x="68" y="145" width="56" height="18" rx="6" fill="#ea580c"/>
+  <text x="96" y="158" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="10" fill="#ffffff" text-anchor="middle">
+    O.S.
+  </text>
+</svg>

@@ -5,6 +5,7 @@ import StageSection from './components/StageSection';
 import SummaryStats from './components/SummaryStats';
 import SignaturesSection from './components/SignaturesSection';
 import PdfExportModal from './components/PdfExportModal';
+import PwaInstallPrompt from './components/PwaInstallPrompt';
 
 import { ACTIVITIES, STAGES, MONTHS } from './data/tits502pData';
 import { Download, CheckCircle2, Mail } from 'lucide-react';
@@ -280,6 +281,9 @@ export default function App() {
         alertConfirmed={alertConfirmed}
         signatures={signatures}
       />
+
+      {/* PWA Mobile Installation Prompt & Offline Banner */}
+      <PwaInstallPrompt />
     </div>
   );
 }
