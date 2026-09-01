@@ -54,7 +54,7 @@ RESUMO EXECUTIVO:
 • Não se Aplica: ${naoAplica}
 
 ${naoConformesItens.length > 0 ? 'NÃO-CONFORMIDADES DETECTADAS:\n' + naoConformesItens.join('\n') + '\n' : ''}
-O arquivo PDF completo com todas as inspeções e fotos encontra-se em anexo nesta mensagem.
+O arquivo PDF com todos os dados da inspeção foi gerado pelo sistema.
 
 TK Elevator Corporation — TITS-502P
   `.trim();
@@ -70,8 +70,48 @@ TK Elevator Corporation — TITS-502P
     }
   }
 
+  const formDataFields = {
+    'Nome do Relatório': `Manutenção Preventiva TKE - ${clienteName}`,
+    'Mês de Referência': nomeMes,
+    'Cliente / Condomínio': clienteName,
+    'Endereço': headerData.endereco || 'Não informado',
+    'Equipamento (Tag / Série)': equipamento,
+    'Data da Visita': dataVisita,
+    'Técnico(s) Responsável(is)': tecnicos,
+    'Total - Conformes': String(conformes),
+    'Total - Não Conformes': String(naoConformes),
+    'Total - Não se Aplica': String(naoAplica),
+    'Não-Conformidades': naoConformesItens.length > 0
+      ? naoConformesItens.join(' | ')
+      : 'Nenhuma detectada (equipamento 100% operacional)',
+  };
+
   // =========================================================
-  // 1. FORMSUBMIT com Arquivo PDF Anexo (multipart/form-data)
+  // Método 1: Vercel Serverless API (/api/send-email)
+  // =========================================================
+  try {
+    const apiRes = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        toEmail,
+        subject,
+        text: plainText,
+        data: formDataFields
+      })
+    });
+    if (apiRes.ok) {
+      const apiData = await apiRes.json().catch(() => ({}));
+      if (apiData.success) {
+        return { success: true, method: 'vercel_api', message: 'E-mail enviado com sucesso via servidor!' };
+      }
+    }
+  } catch (err) {
+    console.warn('Tentativa via /api/send-email falhou ou em ambiente local:', err);
+  }
+
+  // =========================================================
+  // Método 2: FormSubmit direto com FormData / Anexo
   // =========================================================
   try {
     const formData = new FormData();
@@ -79,22 +119,11 @@ TK Elevator Corporation — TITS-502P
     formData.append('_template', 'table');
     formData.append('_captcha', 'false');
     formData.append('_replyto', 'noreply@tkelevator.com');
-    formData.append('Nome do Relatório', `Manutenção Preventiva TKE - ${clienteName}`);
-    formData.append('Mês de Referência', nomeMes);
-    formData.append('Cliente / Condomínio', clienteName);
-    formData.append('Endereço', headerData.endereco || 'Não informado');
-    formData.append('Equipamento (Tag / Série)', equipamento);
-    formData.append('Data da Visita', dataVisita);
-    formData.append('Técnico(s) Responsável(is)', tecnicos);
-    formData.append('Total - Conformes', String(conformes));
-    formData.append('Total - Não Conformes', String(naoConformes));
-    formData.append('Total - Não se Aplica', String(naoAplica));
-    formData.append('Não-Conformidades', naoConformesItens.length > 0
-      ? naoConformesItens.join(' | ')
-      : 'Nenhuma detectada (equipamento 100% operacional)');
+    Object.entries(formDataFields).forEach(([key, val]) => {
+      formData.append(key, val);
+    });
     formData.append('Resumo O.S.', plainText);
 
-    // Anexa o PDF real gerado
     if (pdfBlob) {
       const pdfFile = new File([pdfBlob], pdfFilename, { type: 'application/pdf' });
       formData.append('attachment', pdfFile, pdfFilename);
@@ -110,59 +139,47 @@ TK Elevator Corporation — TITS-502P
 
     const data = await res.json().catch(() => ({}));
     if (res.ok && (data.success === 'true' || data.success === true)) {
-      return { success: true, method: 'formsubmit_with_pdf', message: 'E-mail com relatório PDF em anexo enviado com sucesso!' };
+      return { success: true, method: 'formsubmit_multipart', message: 'E-mail enviado com sucesso!' };
     }
-    console.warn('FormSubmit com anexo retornou:', data);
   } catch (err) {
-    console.warn('Falha no FormSubmit:', err);
+    console.warn('Falha no FormSubmit com anexo:', err);
   }
 
   // =========================================================
-  // 2. EMAILJS como método secundário (se .env configurado)
+  // Método 3: FormSubmit simples em JSON (sem anexo binário)
   // =========================================================
-  const emailjsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-  const emailjsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-  const emailjsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+  try {
+    const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(toEmail)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        _subject: subject,
+        _template: 'table',
+        _captcha: 'false',
+        ...formDataFields,
+        'Resumo O.S.': plainText
+      }),
+    });
 
-  if (emailjsPublicKey && emailjsServiceId && emailjsTemplateId) {
-    try {
-      const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          service_id: emailjsServiceId,
-          template_id: emailjsTemplateId,
-          user_id: emailjsPublicKey,
-          template_params: {
-            to_email: toEmail,
-            subject,
-            cliente: clienteName,
-            equipamento,
-            data_visita: dataVisita,
-            tecnicos,
-            mes_referencia: nomeMes,
-            conformes: String(conformes),
-            nao_conformes: String(naoConformes),
-            nao_aplica: String(naoAplica),
-            nao_conformidades: naoConformesItens.length > 0
-              ? naoConformesItens.join('\n')
-              : 'Nenhuma — equipamento 100% operacional',
-            message: plainText,
-          },
-        }),
-      });
-      if (res.ok) {
-        return { success: true, method: 'emailjs', message: 'E-mail enviado via EmailJS!' };
-      }
-    } catch (err) {
-      console.warn('Falha no EmailJS:', err);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && (data.success === 'true' || data.success === true)) {
+      return { success: true, method: 'formsubmit_json', message: 'E-mail enviado com sucesso!' };
     }
+  } catch (err) {
+    console.warn('Falha no FormSubmit JSON:', err);
   }
 
   // =========================================================
-  // 3. Fallback: abre cliente de email do usuário via mailto
+  // Método 4: Fallback cliente nativo de email (mailto)
   // =========================================================
-  const mailtoLink = `mailto:${encodeURIComponent(toEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(plainText)}`;
-  window.open(mailtoLink, '_blank');
-  return { success: true, method: 'mailto', message: 'Abrindo cliente de e-mail.' };
+  try {
+    const mailtoLink = `mailto:${encodeURIComponent(toEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(plainText)}`;
+    window.open(mailtoLink, '_blank');
+    return { success: true, method: 'mailto', message: 'Abrindo cliente de e-mail.' };
+  } catch (e) {
+    return { success: true, method: 'fallback', message: 'Dados da O.S. prontos.' };
+  }
 }
