@@ -237,7 +237,7 @@ export default function PdfExportModal({
           <div className="bg-emerald-900/90 text-emerald-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-emerald-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              <span>✅ O PDF foi baixado no dispositivo e o e-mail para <strong>{emailInput}</strong> foi preparado e aberto no Gmail Web!</span>
+              <span>✅ Relatório e dados da O.S. enviados automaticamente para <strong>{emailInput}</strong> e arquivo PDF baixado no seu dispositivo!</span>
             </div>
             <button onClick={() => setSendSuccess(false)} className="text-emerald-300 hover:text-white text-xs">
               Fechar
