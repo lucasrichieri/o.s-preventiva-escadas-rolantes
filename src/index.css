@@ -28,61 +28,118 @@
   }
 }
 
-/* Custom Print Styles for Window Print (Salvar como PDF) */
+/* ============================================================
+   PRINT STYLES — Garante que o PDF gerado pelo navegador
+   seja IDÊNTICO à pré-visualização na tela.
+   ============================================================ */
 @media print {
+  /* 1. Forçar renderização de cores/backgrounds em impressão */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
   html, body {
     background-color: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
-  header, footer, button, .no-print, .modal-top-bar, .email-dialog-overlay, .success-banner {
+  /* 2. Esconder TUDO que não é o documento PDF */
+  body > *:not(.modal-overlay) {
     display: none !important;
   }
 
+  /* Esconder controles do modal (barra superior, email, botões) */
+  .modal-top-bar,
+  .email-dialog-overlay,
+  .success-banner,
+  header,
+  footer,
+  button,
+  .no-print,
+  nav {
+    display: none !important;
+  }
+
+  /* 3. Modal overlay: remover backdrop e posicionar como bloco estático */
   .modal-overlay {
     position: static !important;
+    display: block !important;
     background: transparent !important;
     backdrop-filter: none !important;
     padding: 0 !important;
     margin: 0 !important;
     overflow: visible !important;
-    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    z-index: auto !important;
+    inset: auto !important;
   }
 
+  /* 4. Container do modal: remover borda/sombra escura */
   .modal-container {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
     max-width: 100% !important;
+    width: 100% !important;
     max-height: none !important;
+    height: auto !important;
     overflow: visible !important;
     border-radius: 0 !important;
+    display: block !important;
   }
 
+  /* 5. Área de conteúdo do modal: remover fundo escuro */
   .modal-content-area {
     background: transparent !important;
     padding: 0 !important;
     overflow: visible !important;
+    flex: none !important;
   }
 
+  /* 6. O documento PDF em si: ocupar a folha toda */
   #pdf-document {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 10mm 8mm !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
-    page-break-inside: auto;
+    overflow: visible !important;
+    font-size: 11px !important;
   }
 
+  /* 7. Configuração da página A4 */
   @page {
     size: A4 portrait;
-    margin: 8mm 6mm 8mm 6mm;
+    margin: 6mm 4mm 6mm 4mm;
+  }
+
+  /* 8. Controle de quebra de página */
+  .break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Fotos: ajustar para impressão */
+  #pdf-document img {
+    max-width: 100% !important;
+    height: auto !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Links sem decoração na impressão */
+  a {
+    text-decoration: none !important;
   }
 }
 

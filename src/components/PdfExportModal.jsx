@@ -180,9 +180,13 @@ export default function PdfExportModal({
             ref={printRef}
             id="pdf-document"
             className="bg-white text-slate-900 p-6 sm:p-8 rounded-lg shadow-lg font-sans max-w-[210mm] mx-auto text-xs relative overflow-hidden"
+            style={{ backgroundColor: '#ffffff' }}
           >
             {/* Top TKE Brand Gradient Strip */}
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-purple-700 via-rose-600 to-orange-500" />
+            <div
+              className="absolute top-0 left-0 right-0 h-2"
+              style={{ background: 'linear-gradient(to right, #7e22ce, #e11d48, #f97316)', height: '8px' }}
+            />
 
             {/* Header Document Banner with TKE Brand Logo */}
             <div className="border-b-2 border-slate-900 pb-4 mb-4 flex justify-between items-start pt-2">
@@ -205,7 +209,7 @@ export default function PdfExportModal({
               </div>
 
               <div className="text-right border-l-2 border-orange-500 pl-4">
-                <span className="text-[11px] font-black bg-purple-950 text-purple-100 px-2.5 py-1 rounded shadow-sm">
+                <span className="text-[11px] font-black bg-purple-950 text-purple-100 px-2.5 py-1 rounded shadow-sm" style={{ backgroundColor: '#0c0a20', color: '#e9d5ff' }}>
                   TITS-502P (TKE)
                 </span>
                 <p className="text-[10px] text-slate-600 font-medium mt-1.5">Data: {headerData.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : '-'}</p>
@@ -214,7 +218,7 @@ export default function PdfExportModal({
             </div>
 
             {/* Client and Facility Info Grid */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-slate-50 p-3.5 rounded-lg border border-purple-200 mb-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-slate-50 p-3.5 rounded-lg border border-purple-200 mb-4" style={{ backgroundColor: '#f8fafc', borderColor: '#e9d5ff' }}>
               <div>
                 <span className="text-[10px] text-purple-900 font-bold uppercase block">Cliente / Condomínio</span>
                 <span className="text-xs font-bold text-slate-900">{headerData.cliente || '-'}</span>
@@ -237,14 +241,17 @@ export default function PdfExportModal({
               </div>
               <div>
                 <span className="text-[10px] text-purple-900 font-bold uppercase block">Status de Segurança</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded inline-block ${alertConfirmed ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded inline-block ${alertConfirmed ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}
+                  style={alertConfirmed ? { backgroundColor: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' } : { backgroundColor: '#fef3c7', color: '#92400e', borderColor: '#fbbf24' }}
+                >
                   {alertConfirmed ? 'Aviso de Segurança Validado' : 'Aviso Pendente'}
                 </span>
               </div>
             </div>
 
             {/* Safety Warning Banner */}
-            <div className="p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-md mb-4 text-[10px] text-amber-900">
+            <div className="p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-md mb-4 text-[10px] text-amber-900" style={{ backgroundColor: '#fffbeb', borderLeftColor: '#f59e0b' }}>
               <strong className="block text-[10px] uppercase font-extrabold text-amber-950 mb-0.5">
                 ⚠️ ALERTA OBRIGATÓRIO DE SEGURANÇA (TITS-502P):
               </strong>
@@ -253,13 +260,13 @@ export default function PdfExportModal({
 
             {/* Executive Summary Bar */}
             <div className="grid grid-cols-3 gap-3 mb-5 text-center">
-              <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-md">
-                <span className="text-[10px] text-emerald-800 uppercase font-bold block">Conformes</span>
-                <span className="text-base font-extrabold text-emerald-700">{totalConforme}</span>
+              <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-md" style={{ backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                <span className="text-[10px] text-emerald-800 uppercase font-bold block" style={{ color: '#065f46' }}>Conformes</span>
+                <span className="text-base font-extrabold text-emerald-700" style={{ color: '#047857' }}>{totalConforme}</span>
               </div>
               <div className={`p-2 rounded-md border ${totalNaoConforme > 0 ? 'bg-red-100 border-red-300 text-red-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
                 <span className="text-[10px] uppercase font-bold block">Não Conformes</span>
-                <span className="text-base font-extrabold text-red-600">{totalNaoConforme}</span>
+                <span className="text-base font-extrabold text-red-600" style={{ color: '#dc2626' }}>{totalNaoConforme}</span>
               </div>
               <div className="bg-slate-50 border border-slate-200 p-2 rounded-md">
                 <span className="text-[10px] text-slate-500 uppercase font-bold block">Não se Aplica</span>
@@ -275,9 +282,12 @@ export default function PdfExportModal({
                 return (
                   <div key={stage.id} className="border border-slate-300 rounded-lg overflow-hidden">
                     {/* Stage Header with TKE gradient */}
-                    <div className="bg-gradient-to-r from-purple-950 to-slate-900 text-white px-3.5 py-1.5 font-bold text-xs flex justify-between items-center">
+                    <div
+                      className="bg-gradient-to-r from-purple-950 to-slate-900 text-white px-3.5 py-1.5 font-bold text-xs flex justify-between items-center"
+                      style={{ background: 'linear-gradient(to right, #0c0a20, #0f172a)', color: '#ffffff' }}
+                    >
                       <span>{stage.title} - {stage.subtitle}</span>
-                      <span className="text-[10px] font-semibold text-orange-300">{activities.length} itens</span>
+                      <span className="text-[10px] font-semibold text-orange-300" style={{ color: '#fdba74' }}>{activities.length} itens</span>
                     </div>
 
                     {/* Stage Items */}
@@ -291,15 +301,15 @@ export default function PdfExportModal({
                           <div key={act.id} className="p-3 text-[11px] leading-tight break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                             <div className="flex justify-between items-start gap-2">
                               <div className="flex items-start gap-2">
-                                <span className="font-mono font-bold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded border border-purple-300 text-[10px] shrink-0">
+                                <span className="font-mono font-bold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded border border-purple-300 text-[10px] shrink-0" style={{ backgroundColor: '#f3e8ff', color: '#581c87', borderColor: '#d8b4fe' }}>
                                   {act.code}
                                 </span>
                                 {act.isMonthly ? (
-                                  <span className="text-[8px] bg-blue-50 text-blue-800 px-1 py-0.5 rounded border border-blue-200 font-bold uppercase shrink-0">
+                                  <span className="text-[8px] bg-blue-50 text-blue-800 px-1 py-0.5 rounded border border-blue-200 font-bold uppercase shrink-0" style={{ backgroundColor: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' }}>
                                     Mensal
                                   </span>
                                 ) : (
-                                  <span className="text-[8px] bg-amber-50 text-amber-900 px-1 py-0.5 rounded border border-amber-300 font-bold uppercase shrink-0">
+                                  <span className="text-[8px] bg-amber-50 text-amber-900 px-1 py-0.5 rounded border border-amber-300 font-bold uppercase shrink-0" style={{ backgroundColor: '#fffbeb', color: '#78350f', borderColor: '#fcd34d' }}>
                                     Periódica
                                   </span>
                                 )}
@@ -313,13 +323,22 @@ export default function PdfExportModal({
                                 </div>
                               </div>
 
-                              <span className={`px-2 py-0.5 rounded font-bold text-[10px] shrink-0 ${
-                                status === 'Conforme'
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : status === 'Não conforme'
-                                  ? 'bg-red-100 text-red-800 border border-red-400 font-extrabold'
-                                  : 'bg-slate-100 text-slate-600 border border-slate-300'
-                              }`}>
+                              <span
+                                className={`px-2 py-0.5 rounded font-bold text-[10px] shrink-0 ${
+                                  status === 'Conforme'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : status === 'Não conforme'
+                                    ? 'bg-red-100 text-red-800 border border-red-400 font-extrabold'
+                                    : 'bg-slate-100 text-slate-600 border border-slate-300'
+                                }`}
+                                style={
+                                  status === 'Conforme'
+                                    ? { backgroundColor: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
+                                    : status === 'Não conforme'
+                                    ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#f87171' }
+                                    : { backgroundColor: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' }
+                                }
+                              >
                                 {status}
                               </span>
                             </div>
