@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { MONTHS, STAGES } from '../data/tits502pData';
-import { Download, Printer, X, FileCheck, Mail, Send, CheckCircle2, Loader2 } from 'lucide-react';
+import { Download, X, FileCheck, Loader2 } from 'lucide-react';
 
 export default function PdfExportModal({
   isOpen,
@@ -12,11 +12,6 @@ export default function PdfExportModal({
   signatures
 }) {
   const printRef = useRef(null);
-  const [showEmailDialog, setShowEmailDialog] = useState(false);
-  const [emailInput, setEmailInput] = useState('lucasrichieri@gmail.com');
-  const [isSending, setIsSending] = useState(false);
-  const [sendSuccess, setSendSuccess] = useState(false);
-  const [sendError, setSendError] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   if (!isOpen) return null;
@@ -57,43 +52,6 @@ export default function PdfExportModal({
     }
   };
 
-  // PDF download via browser native print dialog (vetorial, fiel ao layout)
-  const handleDownloadPdf = () => {
-    window.print();
-  };
-
-  // Enviar relatório por e-mail (dados completos da O.S. formatados em HTML)
-  const handleSendEmailSubmit = async (e) => {
-    e.preventDefault();
-    if (!emailInput) return;
-
-    setIsSending(true);
-    setSendSuccess(false);
-    setSendError(false);
-
-    try {
-      const { sendReportEmail } = await import('../utils/emailService');
-      const result = await sendReportEmail({
-        toEmail: emailInput,
-        headerData,
-        activeActivities,
-        itemStates,
-        pdfElement: printRef.current,
-      });
-      if (result.success) {
-        setSendSuccess(true);
-        setShowEmailDialog(false);
-      } else {
-        setSendError(true);
-      }
-    } catch (err) {
-      console.error('Erro ao enviar e-mail:', err);
-      setSendError(true);
-    } finally {
-      setIsSending(false);
-    }
-  };
-
   return (
     <div className="modal-overlay fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
       <div className="modal-container bg-slate-900 border border-purple-900/60 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
@@ -107,27 +65,18 @@ export default function PdfExportModal({
             </h3>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Botão Enviar E-mail */}
-            <button
-              onClick={() => { setShowEmailDialog(v => !v); setSendError(false); }}
-              type="button"
-              className="bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-600/50 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow transition-colors cursor-pointer"
-            >
-              <Mail className="w-3.5 h-3.5 text-purple-300" /> Enviar por E-mail (com Anexo)
-            </button>
-
-            {/* Botão Principal: Baixar Arquivo PDF (.pdf) */}
+          <div className="flex items-center gap-3">
+            {/* Botão Único: Baixar Arquivo PDF (.pdf) */}
             <button
               onClick={handleDirectDownload}
               disabled={isDownloadingPdf}
               type="button"
-              className="tke-btn-gradient flex items-center gap-2 px-4 py-2 text-white text-xs sm:text-sm font-black rounded-lg shadow-lg transition-transform transform hover:scale-105 cursor-pointer disabled:opacity-60"
+              className="tke-btn-gradient flex items-center gap-2 px-5 py-2.5 text-white text-xs sm:text-sm font-black rounded-xl shadow-lg transition-transform transform hover:scale-105 cursor-pointer disabled:opacity-60"
             >
               {isDownloadingPdf ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-amber-200" />
-                  Gerando PDF...
+                  Gerando e Baixando PDF...
                 </>
               ) : (
                 <>
@@ -137,85 +86,15 @@ export default function PdfExportModal({
               )}
             </button>
 
-            {/* Botão Secundário: Imprimir / Salvar Navegador */}
-            <button
-              onClick={handleDownloadPdf}
-              type="button"
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow transition-colors cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5 text-slate-300" /> Imprimir
-            </button>
-
             <button
               onClick={onClose}
               type="button"
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
-
-        {/* Email Send Dialog Overlay */}
-        {showEmailDialog && (
-          <div className="email-dialog-overlay bg-purple-950/90 border-b border-purple-800 p-4 px-6 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Mail className="w-6 h-6 text-amber-300 shrink-0" />
-              <div>
-                <h4 className="font-extrabold text-sm text-white">Enviar Relatório com PDF Anexo por E-mail</h4>
-                <p className="text-xs text-purple-200">O arquivo PDF gerado e o resumo da O.S. serão enviados em anexo.</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSendEmailSubmit} className="flex items-center gap-2 w-full sm:w-auto">
-              <input
-                type="email"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="Endereço de e-mail"
-                required
-                className="bg-slate-900 border border-purple-500/60 text-white text-xs rounded-lg px-3 py-2 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-amber-400"
-              />
-              <button
-                type="submit"
-                disabled={isSending}
-                className="tke-btn-gradient px-4 py-2 text-xs font-extrabold text-white rounded-lg flex items-center gap-1.5 shadow-md shrink-0 cursor-pointer disabled:opacity-50"
-              >
-                {isSending ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando PDF e Enviando...</>
-                ) : (
-                  <><Send className="w-3.5 h-3.5" /> Enviar com Anexo</>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowEmailDialog(false)}
-                className="text-xs text-purple-300 hover:text-white px-2 py-1"
-              >
-                Cancelar
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Success Banner */}
-        {sendSuccess && (
-          <div className="success-banner bg-emerald-900/90 text-emerald-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-emerald-700">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              <span>✅ Relatório e <strong>arquivo PDF anexo</strong> enviados com sucesso para <strong>{emailInput}</strong>!</span>
-            </div>
-            <button onClick={() => setSendSuccess(false)} className="text-emerald-300 hover:text-white text-xs">Fechar</button>
-          </div>
-        )}
-
-        {/* Error Banner */}
-        {sendError && (
-          <div className="bg-red-900/90 text-red-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-red-700">
-            <span>⚠️ Falha no envio automático. Verifique sua conexão ou tente novamente.</span>
-            <button onClick={() => setSendError(false)} className="text-red-300 hover:text-white text-xs">Fechar</button>
-          </div>
-        )}
 
         {/* Printable / Preview Content Area */}
         <div className="modal-content-area p-4 sm:p-6 overflow-y-auto bg-slate-950 flex-1">

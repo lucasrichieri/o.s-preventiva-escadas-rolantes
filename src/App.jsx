@@ -8,7 +8,7 @@ import PdfExportModal from './components/PdfExportModal';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 
 import { ACTIVITIES, STAGES, MONTHS } from './data/tits502pData';
-import { Download, CheckCircle2, Mail } from 'lucide-react';
+import { Download, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const currentDateStr = new Date().toISOString().split('T')[0];
@@ -39,7 +39,10 @@ export default function App() {
     const selectedMonth = headerData.mesRef;
     return ACTIVITIES.filter(act => {
       if (act.isMonthly) return true;
-      return act.months && act.months.includes(selectedMonth);
+      if (act.months && Array.isArray(act.months)) {
+        return act.months.includes(selectedMonth);
+      }
+      return false;
     });
   }, [headerData.mesRef]);
 
@@ -50,13 +53,13 @@ export default function App() {
     }));
   };
 
-  // Generate synthetic sample photo for demo matching TKE brand theme
-  const createSamplePhoto = (title, bgColor1 = '#6b21a8', bgColor2 = '#ea580c') => {
+  // Helper para gerar imagem canvas demonstrativa com texto
+  const createDemoPlaceholderImage = (title, bgColor1 = '#4c1d95', bgColor2 = '#ea580c') => {
     const canvas = document.createElement('canvas');
     canvas.width = 400;
     canvas.height = 300;
     const ctx = canvas.getContext('2d');
-    
+
     // Background TKE gradient
     const grad = ctx.createLinearGradient(0, 0, 400, 300);
     grad.addColorStop(0, bgColor1);
@@ -102,38 +105,44 @@ export default function App() {
 
     setAlertConfirmed(true);
 
-    const demoPhoto1 = createSamplePhoto('Guarda-corpos e Defletores', '#581c87', '#d97706');
-    const demoPhoto2 = createSamplePhoto('Corrente Principal Poço Superior', '#4c1d95', '#c2410c');
-    const demoPhoto3 = createSamplePhoto('Freio de Serviço Lona Desgaste', '#991b1b', '#ea580c');
+    const demoPhoto1 = createDemoPlaceholderImage('Guarda-corpos e Defletores', '#581c87', '#c2410c');
+    const demoPhoto2 = createDemoPlaceholderImage('Quadro de Comando e Inversor', '#1e1b4b', '#4338ca');
+    const demoPhoto3 = createDemoPlaceholderImage('Lubrificação e Carro Tensor', '#14532d', '#15803d');
 
-    const demoItemStates = {};
+    const demoStates = {};
     activeActivities.forEach((act, idx) => {
-      if (act.id === '5.5.1') {
-        demoItemStates[act.id] = {
+      if (idx === 0) {
+        demoStates[act.id] = {
           status: 'Conforme',
           comment: 'Defletores e guarda-corpos em bom estado e fixados conforme padrão TKE.',
           photos: [demoPhoto1]
         };
-      } else if (act.id === '5.6.4') {
-        demoItemStates[act.id] = {
+      } else if (idx === 3) {
+        demoStates[act.id] = {
           status: 'Conforme',
-          comment: 'Corrente principal com folga regulada dentro do especificado.',
+          comment: 'Quadro elétrico limpo, barramentos e conexões verificadas.',
           photos: [demoPhoto2]
         };
-      } else if (act.id === '5.6.9-desgaste') {
-        demoItemStates[act.id] = {
-          status: 'Não conforme',
-          comment: 'Lona do freio de serviço apresentando desgaste excessivo (requer substituição imediata).',
+      } else if (idx === 7) {
+        demoStates[act.id] = {
+          status: 'Conforme',
+          comment: 'Lubrificação efetuada com óleo recomendado pelo fabricante.',
           photos: [demoPhoto3]
         };
-      } else if (idx % 7 === 0) {
-        demoItemStates[act.id] = {
+      } else if (idx === 14) {
+        demoStates[act.id] = {
+          status: 'Não conforme',
+          comment: 'Desgaste leve identificado na lona; sugerida substituição preventiva no próximo ciclo.',
+          photos: []
+        };
+      } else if (idx === 18) {
+        demoStates[act.id] = {
           status: 'Não se aplica',
-          comment: 'Item não existente neste modelo específico.',
+          comment: 'Equipamento não possui sistema de inversor regenerativo.',
           photos: []
         };
       } else {
-        demoItemStates[act.id] = {
+        demoStates[act.id] = {
           status: 'Conforme',
           comment: '',
           photos: []
@@ -141,12 +150,12 @@ export default function App() {
       }
     });
 
-    setItemStates(demoItemStates);
+    setItemStates(demoStates);
 
     setSignatures({
-      elaborado: { nome: 'Carlos Eduardo Silva (Técnico TKE)', data: currentDateStr },
-      revisado: { nome: 'Engº Fernando Santos (Supervisor TKE CREA 509214)', data: currentDateStr },
-      aprovado: { nome: 'Gerência Operacional Plaza Shopping', data: currentDateStr }
+      elaborado: { nome: 'Carlos Eduardo Silva', data: currentDateStr },
+      revisado: { nome: 'Marcos Roberto Santos', data: currentDateStr },
+      aprovado: { nome: 'Eng. Fernando Costa (Gestor Predial)', data: currentDateStr }
     });
   };
 
@@ -178,18 +187,10 @@ export default function App() {
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => setIsPdfModalOpen(true)}
-            className="bg-purple-900/10 hover:bg-purple-900/20 text-purple-900 border border-purple-300 flex items-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-xl transition-colors cursor-pointer"
-          >
-            <Mail className="w-4 h-4 text-purple-700" />
-            Enviar por E-mail
-          </button>
-
-          <button
-            onClick={() => setIsPdfModalOpen(true)}
-            className="tke-btn-gradient flex items-center gap-2 px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md cursor-pointer transform hover:-translate-y-0.5"
+            className="tke-btn-gradient flex items-center gap-2 px-5 py-2.5 text-white font-black text-xs sm:text-sm rounded-xl shadow-md cursor-pointer transform hover:-translate-y-0.5"
           >
             <Download className="w-4 h-4 text-amber-200" />
-            Baixar PDF
+            Visualizar e Baixar PDF
           </button>
         </div>
       </header>
@@ -251,18 +252,10 @@ export default function App() {
         />
 
         {/* Bottom PDF Export Floating Trigger */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 pb-12">
+        <div className="flex items-center justify-center pt-4 pb-12">
           <button
             onClick={() => setIsPdfModalOpen(true)}
-            className="bg-purple-950 hover:bg-purple-900 text-white font-bold text-sm sm:text-base px-6 py-3.5 rounded-2xl shadow-lg border border-purple-800 flex items-center gap-2.5 transition-all cursor-pointer transform hover:-translate-y-0.5"
-          >
-            <Mail className="w-5 h-5 text-amber-300" />
-            Enviar PDF para lucasrichieri@gmail.com
-          </button>
-
-          <button
-            onClick={() => setIsPdfModalOpen(true)}
-            className="tke-btn-gradient flex items-center gap-2.5 px-8 py-4 text-white font-extrabold text-base rounded-2xl shadow-xl transition-all cursor-pointer transform hover:-translate-y-1 active:translate-y-0"
+            className="tke-btn-gradient flex items-center gap-3 px-10 py-4 text-white font-black text-base rounded-2xl shadow-xl transition-all cursor-pointer transform hover:-translate-y-1 active:translate-y-0"
           >
             <Download className="w-5 h-5 text-amber-200" />
             Visualizar e Baixar Relatório (PDF)
