@@ -49,6 +49,24 @@ export default function PdfExportModal({
     window.print();
   };
 
+  const handleDirectDownload = async () => {
+    if (!printRef.current) return;
+    setIsDownloadingPdf(true);
+    try {
+      const { downloadPdfFile } = await import('../utils/emailService');
+      const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
+      const success = await downloadPdfFile(printRef.current, `Relatorio_TKE_${clienteSafe}.pdf`);
+      if (!success) {
+        window.print();
+      }
+    } catch (err) {
+      console.error('Erro no download direto do PDF:', err);
+      window.print();
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const handleSendEmailSubmit = async (e) => {
     e.preventDefault();
     if (!emailInput) return;
@@ -56,20 +74,20 @@ export default function PdfExportModal({
     setIsSending(true);
     setSendSuccess(false);
 
-    // 1. Dispara o envio automático em segundo plano
     try {
       const { sendReportEmail } = await import('../utils/emailService');
       await sendReportEmail({
         toEmail: emailInput,
         headerData,
         activeActivities,
-        itemStates
+        itemStates,
+        pdfElement: printRef.current
       });
+      setSendSuccess(true);
     } catch (err) {
       console.error('Erro ao enviar e-mail:', err);
     } finally {
       setIsSending(false);
-      setSendSuccess(true);
     }
   };
 
@@ -98,12 +116,30 @@ export default function PdfExportModal({
             >
               <Mail className="w-3.5 h-3.5 text-purple-300" /> Enviar por E-mail
             </button>
+
+            <button
+              onClick={handleDirectDownload}
+              disabled={isDownloadingPdf}
+              type="button"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isDownloadingPdf ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" /> Gerando PDF...
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5 text-amber-300" /> Baixar Arquivo (.pdf)
+                </>
+              )}
+            </button>
+
             <button
               onClick={handleDownloadPdf}
               type="button"
               className="tke-btn-gradient flex items-center gap-1.5 px-4 py-2 text-white text-xs sm:text-sm font-extrabold rounded-lg shadow-lg transition-transform transform hover:scale-105 cursor-pointer"
             >
-              <Download className="w-4 h-4 text-amber-200" /> Salvar em PDF / Imprimir
+              <Printer className="w-4 h-4 text-amber-200" /> Salvar em PDF / Imprimir
             </button>
             <button
               onClick={onClose}
