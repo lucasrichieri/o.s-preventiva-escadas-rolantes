@@ -78,6 +78,7 @@ export default function PdfExportModal({
         headerData,
         activeActivities,
         itemStates,
+        pdfElement: printRef.current,
       });
       if (result.success) {
         setSendSuccess(true);
@@ -113,7 +114,7 @@ export default function PdfExportModal({
               type="button"
               className="bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-600/50 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow transition-colors cursor-pointer"
             >
-              <Mail className="w-3.5 h-3.5 text-purple-300" /> Enviar por E-mail
+              <Mail className="w-3.5 h-3.5 text-purple-300" /> Enviar por E-mail (com Anexo)
             </button>
 
             {/* Botão Principal: Baixar Arquivo PDF (.pdf) */}
@@ -161,8 +162,8 @@ export default function PdfExportModal({
             <div className="flex items-center gap-3">
               <Mail className="w-6 h-6 text-amber-300 shrink-0" />
               <div>
-                <h4 className="font-extrabold text-sm text-white">Enviar Relatório por E-mail</h4>
-                <p className="text-xs text-purple-200">Os dados completos da O.S. serão enviados para o destinatário abaixo.</p>
+                <h4 className="font-extrabold text-sm text-white">Enviar Relatório com PDF Anexo por E-mail</h4>
+                <p className="text-xs text-purple-200">O arquivo PDF gerado e o resumo da O.S. serão enviados em anexo.</p>
               </div>
             </div>
 
@@ -181,9 +182,9 @@ export default function PdfExportModal({
                 className="tke-btn-gradient px-4 py-2 text-xs font-extrabold text-white rounded-lg flex items-center gap-1.5 shadow-md shrink-0 cursor-pointer disabled:opacity-50"
               >
                 {isSending ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enviando...</>
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando PDF e Enviando...</>
                 ) : (
-                  <><Send className="w-3.5 h-3.5" /> Enviar</>
+                  <><Send className="w-3.5 h-3.5" /> Enviar com Anexo</>
                 )}
               </button>
               <button
@@ -202,7 +203,7 @@ export default function PdfExportModal({
           <div className="success-banner bg-emerald-900/90 text-emerald-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-emerald-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              <span>✅ Relatório enviado com sucesso para <strong>{emailInput}</strong>! Clique em "Salvar em PDF" para baixar o arquivo.</span>
+              <span>✅ Relatório e <strong>arquivo PDF anexo</strong> enviados com sucesso para <strong>{emailInput}</strong>!</span>
             </div>
             <button onClick={() => setSendSuccess(false)} className="text-emerald-300 hover:text-white text-xs">Fechar</button>
           </div>
