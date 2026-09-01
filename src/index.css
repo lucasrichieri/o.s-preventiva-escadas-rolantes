@@ -30,11 +30,13 @@
 
 /* ============================================================
    PRINT STYLES — Garante que o PDF gerado pelo navegador
-   seja IDÊNTICO à pré-visualização na tela.
+   seja IDÊNTICO à pré-visualização na tela sem páginas em branco.
    ============================================================ */
 @media print {
-  /* 1. Forçar renderização de cores/backgrounds em impressão */
-  * {
+  /* Forçar renderização de cores, fundos e gradientes */
+  *,
+  *::before,
+  *::after {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
@@ -47,31 +49,37 @@
     padding: 0 !important;
     width: 100% !important;
     height: auto !important;
+    min-height: 100% !important;
     overflow: visible !important;
   }
 
-  /* 2. Esconder TUDO que não é o documento PDF */
-  body > *:not(.modal-overlay) {
-    display: none !important;
+  #root {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
   }
 
-  /* Esconder controles do modal (barra superior, email, botões) */
+  /* Esconder todos os elementos de interface fora do PDF */
+  .no-print,
   .modal-top-bar,
   .email-dialog-overlay,
   .success-banner,
   header,
   footer,
   button,
-  .no-print,
   nav {
     display: none !important;
   }
 
-  /* 3. Modal overlay: remover backdrop e posicionar como bloco estático */
+  /* Transformar o modal em fluxo normal para impressão */
   .modal-overlay {
     position: static !important;
     display: block !important;
-    background: transparent !important;
+    background: #ffffff !important;
     backdrop-filter: none !important;
     padding: 0 !important;
     margin: 0 !important;
@@ -82,9 +90,8 @@
     inset: auto !important;
   }
 
-  /* 4. Container do modal: remover borda/sombra escura */
   .modal-container {
-    background: transparent !important;
+    background: #ffffff !important;
     border: none !important;
     box-shadow: none !important;
     max-width: 100% !important;
@@ -94,55 +101,51 @@
     overflow: visible !important;
     border-radius: 0 !important;
     display: block !important;
-  }
-
-  /* 5. Área de conteúdo do modal: remover fundo escuro */
-  .modal-content-area {
-    background: transparent !important;
+    margin: 0 !important;
     padding: 0 !important;
-    overflow: visible !important;
-    flex: none !important;
   }
 
-  /* 6. O documento PDF em si: ocupar a folha toda */
+  .modal-content-area {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  /* Documento PDF ocupando a folha com formatação precisa */
   #pdf-document {
+    display: block !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 10mm 8mm !important;
+    padding: 4mm 2mm !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
     overflow: visible !important;
     font-size: 11px !important;
+    background-color: #ffffff !important;
   }
 
-  /* 7. Configuração da página A4 */
+  /* Configuração de página A4 */
   @page {
     size: A4 portrait;
     margin: 6mm 4mm 6mm 4mm;
   }
 
-  /* 8. Controle de quebra de página */
+  /* Prevenir quebra indesejada dentro de blocos */
   .break-inside-avoid {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
-  /* Fotos: ajustar para impressão */
   #pdf-document img {
     max-width: 100% !important;
-    height: auto !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
-
-  /* Links sem decoração na impressão */
-  a {
-    text-decoration: none !important;
-  }
 }
-
 
 /* Smooth custom scrollbar for slate-200 background */
 ::-webkit-scrollbar {

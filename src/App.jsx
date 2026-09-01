@@ -154,7 +154,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-200 text-slate-900 font-sans pb-16 selection:bg-orange-500 selection:text-white">
       
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-300 px-4 sm:px-8 py-3.5 flex justify-between items-center shadow-md">
+      <header className="no-print sticky top-0 z-40 bg-white border-b border-slate-300 px-4 sm:px-8 py-3.5 flex justify-between items-center shadow-md">
         <div className="flex items-center gap-3">
           {/* TKE Logo Icon */}
           <div className="px-3 py-1.5 rounded-xl bg-gradient-to-tr from-purple-800 via-rose-600 to-orange-500 flex items-center justify-center shadow-md">
@@ -195,7 +195,7 @@ export default function App() {
       </header>
 
       {/* Main Body Container */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
+      <main className="no-print max-w-6xl mx-auto px-4 sm:px-6 pt-8">
         
         {/* Header Form */}
         <HeaderForm
