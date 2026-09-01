@@ -112,23 +112,21 @@ export default function PdfExportModal({
     // 1. Gera e baixa o PDF no dispositivo do usuário
     await handleDownloadPdf();
 
-    // 2. Prepara e dispara o cliente de e-mail (mailto:)
-    const clienteName = headerData.cliente || 'Equipamento Plaza';
-    const dataVisita = headerData.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : 'Data';
-    const subject = encodeURIComponent(`[Relatório TKE] Manutenção Preventiva TITS-502P - ${clienteName}`);
-    const body = encodeURIComponent(
-      `Prezados,\n\nSegue em anexo o Relatório Fotográfico de Manutenção Preventiva (TITS-502P) realizado para:\n` +
-      `- Cliente: ${clienteName}\n` +
-      `- Equipamento: ${headerData.equipamento || 'Escada Rolante'}\n` +
-      `- Data: ${dataVisita}\n` +
-      `- Técnico Responsável: ${headerData.tecnicos || 'TKE'}\n\n` +
-      `Atenciosamente,\n` +
-      `Equipe Técnica TK Elevator (TKE)`
-    );
-
-    setIsSending(false);
-    setSendSuccess(true);
-    window.location.href = `mailto:${emailInput}?subject=${subject}&body=${body}`;
+    // 2. Dispara o e-mail via Gmail Web ou EmailJS API
+    try {
+      const { sendReportEmail } = await import('../utils/emailService');
+      await sendReportEmail({
+        toEmail: emailInput,
+        headerData,
+        activeActivities,
+        itemStates
+      });
+    } catch (err) {
+      console.error('Erro ao enviar e-mail:', err);
+    } finally {
+      setIsSending(false);
+      setSendSuccess(true);
+    }
   };
 
   const handleNativePrint = () => {
@@ -239,7 +237,7 @@ export default function PdfExportModal({
           <div className="bg-emerald-900/90 text-emerald-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-emerald-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              <span>✅ Relatório enviado com sucesso para <strong>{emailInput}</strong> e arquivo PDF disponibilizado para download!</span>
+              <span>✅ O PDF foi baixado no dispositivo e o e-mail para <strong>{emailInput}</strong> foi preparado e aberto no Gmail Web!</span>
             </div>
             <button onClick={() => setSendSuccess(false)} className="text-emerald-300 hover:text-white text-xs">
               Fechar
