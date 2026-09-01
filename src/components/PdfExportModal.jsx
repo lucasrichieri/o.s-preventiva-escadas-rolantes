@@ -17,6 +17,7 @@ export default function PdfExportModal({
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
   const [sendError, setSendError] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   if (!isOpen) return null;
 
@@ -39,6 +40,22 @@ export default function PdfExportModal({
     else if (status === 'Não conforme') totalNaoConforme++;
     else if (status === 'Não se aplica') totalNaoAplica++;
   });
+
+  // Download direto do arquivo PDF (.pdf)
+  const handleDirectDownload = async () => {
+    if (!printRef.current) return;
+    setIsDownloadingPdf(true);
+    try {
+      const { downloadReportPdf } = await import('../utils/pdfGenerator');
+      const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
+      await downloadReportPdf(printRef.current, `Relatorio_TKE_${clienteSafe}.pdf`);
+    } catch (err) {
+      console.error('Erro no download do PDF:', err);
+      window.print();
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   // PDF download via browser native print dialog (vetorial, fiel ao layout)
   const handleDownloadPdf = () => {
@@ -99,13 +116,33 @@ export default function PdfExportModal({
               <Mail className="w-3.5 h-3.5 text-purple-300" /> Enviar por E-mail
             </button>
 
-            {/* Botão Salvar PDF (window.print → navegador gera PDF nativo vetorial) */}
+            {/* Botão Principal: Baixar Arquivo PDF (.pdf) */}
+            <button
+              onClick={handleDirectDownload}
+              disabled={isDownloadingPdf}
+              type="button"
+              className="tke-btn-gradient flex items-center gap-2 px-4 py-2 text-white text-xs sm:text-sm font-black rounded-lg shadow-lg transition-transform transform hover:scale-105 cursor-pointer disabled:opacity-60"
+            >
+              {isDownloadingPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-200" />
+                  Gerando PDF...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 text-amber-200" />
+                  Baixar Arquivo PDF (.pdf)
+                </>
+              )}
+            </button>
+
+            {/* Botão Secundário: Imprimir / Salvar Navegador */}
             <button
               onClick={handleDownloadPdf}
               type="button"
-              className="tke-btn-gradient flex items-center gap-1.5 px-4 py-2 text-white text-xs sm:text-sm font-extrabold rounded-lg shadow-lg transition-transform transform hover:scale-105 cursor-pointer"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow transition-colors cursor-pointer"
             >
-              <Download className="w-4 h-4 text-amber-200" /> Salvar em PDF / Imprimir
+              <Printer className="w-3.5 h-3.5 text-slate-300" /> Imprimir
             </button>
 
             <button
