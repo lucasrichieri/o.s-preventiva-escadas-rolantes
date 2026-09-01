@@ -1,5 +1,4 @@
 import React, { useRef, useState } from 'react';
-import html2pdf from 'html2pdf.js';
 import { MONTHS, STAGES } from '../data/tits502pData';
 import { Download, Printer, X, FileCheck, Mail, Send, CheckCircle2, Loader2 } from 'lucide-react';
 
@@ -17,7 +16,7 @@ export default function PdfExportModal({
   const [emailInput, setEmailInput] = useState('lucasrichieri@gmail.com');
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [sendError, setSendError] = useState(false);
 
   if (!isOpen) return null;
 
@@ -26,10 +25,7 @@ export default function PdfExportModal({
   // Group activities by stage
   const activitiesByStage = STAGES.map(stage => {
     const stageActs = activeActivities.filter(a => a.stageId === stage.id);
-    return {
-      stage,
-      activities: stageActs
-    };
+    return { stage, activities: stageActs };
   });
 
   // Calculate overall stats
@@ -44,55 +40,40 @@ export default function PdfExportModal({
     else if (status === 'Não se aplica') totalNaoAplica++;
   });
 
+  // PDF download via browser native print dialog (vetorial, fiel ao layout)
   const handleDownloadPdf = () => {
-    // Abre a caixa de diálogo nativa do navegador pré-formatada para "Salvar como PDF"
     window.print();
   };
 
-  const handleDirectDownload = async () => {
-    if (!printRef.current) return;
-    setIsDownloadingPdf(true);
-    try {
-      const { downloadPdfFile } = await import('../utils/emailService');
-      const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
-      const success = await downloadPdfFile(printRef.current, `Relatorio_TKE_${clienteSafe}.pdf`);
-      if (!success) {
-        window.print();
-      }
-    } catch (err) {
-      console.error('Erro no download direto do PDF:', err);
-      window.print();
-    } finally {
-      setIsDownloadingPdf(false);
-    }
-  };
-
+  // Enviar relatório por e-mail (dados completos da O.S. formatados em HTML)
   const handleSendEmailSubmit = async (e) => {
     e.preventDefault();
     if (!emailInput) return;
 
     setIsSending(true);
     setSendSuccess(false);
+    setSendError(false);
 
     try {
       const { sendReportEmail } = await import('../utils/emailService');
-      await sendReportEmail({
+      const result = await sendReportEmail({
         toEmail: emailInput,
         headerData,
         activeActivities,
         itemStates,
-        pdfElement: printRef.current
       });
-      setSendSuccess(true);
+      if (result.success) {
+        setSendSuccess(true);
+        setShowEmailDialog(false);
+      } else {
+        setSendError(true);
+      }
     } catch (err) {
       console.error('Erro ao enviar e-mail:', err);
+      setSendError(true);
     } finally {
       setIsSending(false);
     }
-  };
-
-  const handleNativePrint = () => {
-    window.print();
   };
 
   return (
@@ -109,38 +90,24 @@ export default function PdfExportModal({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Botão Enviar E-mail */}
             <button
-              onClick={() => setShowEmailDialog(true)}
+              onClick={() => { setShowEmailDialog(v => !v); setSendError(false); }}
               type="button"
               className="bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-600/50 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow transition-colors cursor-pointer"
             >
               <Mail className="w-3.5 h-3.5 text-purple-300" /> Enviar por E-mail
             </button>
 
-            <button
-              onClick={handleDirectDownload}
-              disabled={isDownloadingPdf}
-              type="button"
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {isDownloadingPdf ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" /> Gerando PDF...
-                </>
-              ) : (
-                <>
-                  <Download className="w-3.5 h-3.5 text-amber-300" /> Baixar Arquivo (.pdf)
-                </>
-              )}
-            </button>
-
+            {/* Botão Salvar PDF (window.print → navegador gera PDF nativo vetorial) */}
             <button
               onClick={handleDownloadPdf}
               type="button"
               className="tke-btn-gradient flex items-center gap-1.5 px-4 py-2 text-white text-xs sm:text-sm font-extrabold rounded-lg shadow-lg transition-transform transform hover:scale-105 cursor-pointer"
             >
-              <Printer className="w-4 h-4 text-amber-200" /> Salvar em PDF / Imprimir
+              <Download className="w-4 h-4 text-amber-200" /> Salvar em PDF / Imprimir
             </button>
+
             <button
               onClick={onClose}
               type="button"
@@ -153,12 +120,12 @@ export default function PdfExportModal({
 
         {/* Email Send Dialog Overlay */}
         {showEmailDialog && (
-          <div className="email-dialog-overlay bg-purple-950/90 border-b border-purple-800 p-4 px-6 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+          <div className="email-dialog-overlay bg-purple-950/90 border-b border-purple-800 p-4 px-6 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Mail className="w-6 h-6 text-amber-300 shrink-0" />
               <div>
-                <h4 className="font-extrabold text-sm text-white">Enviar Relatório PDF por E-mail</h4>
-                <p className="text-xs text-purple-200">O PDF será baixado no dispositivo e o e-mail será enviado para o destinatário abaixo.</p>
+                <h4 className="font-extrabold text-sm text-white">Enviar Relatório por E-mail</h4>
+                <p className="text-xs text-purple-200">Os dados completos da O.S. serão enviados para o destinatário abaixo.</p>
               </div>
             </div>
 
@@ -177,13 +144,9 @@ export default function PdfExportModal({
                 className="tke-btn-gradient px-4 py-2 text-xs font-extrabold text-white rounded-lg flex items-center gap-1.5 shadow-md shrink-0 cursor-pointer disabled:opacity-50"
               >
                 {isSending ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Enviando...
-                  </>
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enviando...</>
                 ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" /> Enviar PDF
-                  </>
+                  <><Send className="w-3.5 h-3.5" /> Enviar</>
                 )}
               </button>
               <button
@@ -197,15 +160,22 @@ export default function PdfExportModal({
           </div>
         )}
 
+        {/* Success Banner */}
         {sendSuccess && (
           <div className="success-banner bg-emerald-900/90 text-emerald-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-emerald-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              <span>✅ Relatório e dados da O.S. enviados automaticamente para <strong>{emailInput}</strong> e arquivo PDF baixado no seu dispositivo!</span>
+              <span>✅ Relatório enviado com sucesso para <strong>{emailInput}</strong>! Clique em "Salvar em PDF" para baixar o arquivo.</span>
             </div>
-            <button onClick={() => setSendSuccess(false)} className="text-emerald-300 hover:text-white text-xs">
-              Fechar
-            </button>
+            <button onClick={() => setSendSuccess(false)} className="text-emerald-300 hover:text-white text-xs">Fechar</button>
+          </div>
+        )}
+
+        {/* Error Banner */}
+        {sendError && (
+          <div className="bg-red-900/90 text-red-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-red-700">
+            <span>⚠️ Falha no envio automático. Verifique sua conexão ou tente novamente.</span>
+            <button onClick={() => setSendError(false)} className="text-red-300 hover:text-white text-xs">Fechar</button>
           </div>
         )}
 
