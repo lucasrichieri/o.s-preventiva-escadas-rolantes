@@ -44,62 +44,9 @@ export default function PdfExportModal({
     else if (status === 'Não se aplica') totalNaoAplica++;
   });
 
-  const handleDownloadPdf = async () => {
-    const element = printRef.current;
-    if (!element) return;
-
-    setIsDownloadingPdf(true);
-    const clientSanitized = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9\-_]/g, '_');
-    const filename = `Relatorio_TKE_TITS502P_${clientSanitized}_${headerData.data || 'Data'}.pdf`;
-
-    try {
-      const getHtml2Pdf = () => (typeof html2pdf === 'function' ? html2pdf : html2pdf.default);
-      const pdfFunc = getHtml2Pdf();
-
-      const opt = {
-        margin: [5, 5, 5, 5],
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { 
-          scale: 2, 
-          useCORS: true, 
-          allowTaint: true,
-          logging: false,
-          backgroundColor: '#ffffff'
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      // Generate blob for direct browser trigger
-      const pdfBlob = await pdfFunc().set(opt).from(element).output('blob');
-      const url = URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (err) {
-      console.warn('Falha no Blob URL, tentando save() direto:', err);
-      try {
-        const getHtml2Pdf = () => (typeof html2pdf === 'function' ? html2pdf : html2pdf.default);
-        const pdfFunc = getHtml2Pdf();
-        const opt = {
-          margin: [5, 5, 5, 5],
-          filename: filename,
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 1.5, useCORS: true, allowTaint: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-        pdfFunc().set(opt).from(element).save();
-      } catch (fallbackErr) {
-        console.error('Invocando impressão nativa:', fallbackErr);
-        window.print();
-      }
-    } finally {
-      setIsDownloadingPdf(false);
-    }
+  const handleDownloadPdf = () => {
+    // Abre a caixa de diálogo nativa do navegador pré-formatada para "Salvar como PDF"
+    window.print();
   };
 
   const handleSendEmailSubmit = async (e) => {
@@ -109,10 +56,7 @@ export default function PdfExportModal({
     setIsSending(true);
     setSendSuccess(false);
 
-    // 1. Gera e baixa o PDF no dispositivo do usuário
-    await handleDownloadPdf();
-
-    // 2. Dispara o e-mail via Gmail Web ou EmailJS API
+    // 1. Dispara o envio automático em segundo plano
     try {
       const { sendReportEmail } = await import('../utils/emailService');
       await sendReportEmail({
@@ -134,11 +78,11 @@ export default function PdfExportModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-purple-900/60 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="modal-overlay fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="modal-container bg-slate-900 border border-purple-900/60 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* Modal Top Bar */}
-        <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0 flex-wrap gap-2">
+        <div className="modal-top-bar p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <FileCheck className="w-5 h-5 text-orange-400" />
             <h3 className="text-sm sm:text-base font-extrabold text-white">
@@ -155,32 +99,16 @@ export default function PdfExportModal({
               <Mail className="w-3.5 h-3.5 text-purple-300" /> Enviar por E-mail
             </button>
             <button
-              onClick={handleNativePrint}
-              type="button"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" /> Impressão
-            </button>
-            <button
               onClick={handleDownloadPdf}
-              disabled={isDownloadingPdf}
               type="button"
-              className="tke-btn-gradient flex items-center gap-1.5 px-4 py-1.5 text-white text-xs font-bold rounded-lg shadow-md transition-colors cursor-pointer disabled:opacity-60"
+              className="tke-btn-gradient flex items-center gap-1.5 px-4 py-2 text-white text-xs sm:text-sm font-extrabold rounded-lg shadow-lg transition-transform transform hover:scale-105 cursor-pointer"
             >
-              {isDownloadingPdf ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando PDF...
-                </>
-              ) : (
-                <>
-                  <Download className="w-3.5 h-3.5" /> Baixar PDF
-                </>
-              )}
+              <Download className="w-4 h-4 text-amber-200" /> Salvar em PDF / Imprimir
             </button>
             <button
               onClick={onClose}
               type="button"
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -189,7 +117,7 @@ export default function PdfExportModal({
 
         {/* Email Send Dialog Overlay */}
         {showEmailDialog && (
-          <div className="bg-purple-950/90 border-b border-purple-800 p-4 px-6 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
+          <div className="email-dialog-overlay bg-purple-950/90 border-b border-purple-800 p-4 px-6 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fadeIn">
             <div className="flex items-center gap-3">
               <Mail className="w-6 h-6 text-amber-300 shrink-0" />
               <div>
@@ -234,7 +162,7 @@ export default function PdfExportModal({
         )}
 
         {sendSuccess && (
-          <div className="bg-emerald-900/90 text-emerald-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-emerald-700">
+          <div className="success-banner bg-emerald-900/90 text-emerald-100 p-3 px-6 text-xs font-bold flex items-center justify-between border-b border-emerald-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-300" />
               <span>✅ Relatório e dados da O.S. enviados automaticamente para <strong>{emailInput}</strong> e arquivo PDF baixado no seu dispositivo!</span>
@@ -246,7 +174,7 @@ export default function PdfExportModal({
         )}
 
         {/* Printable / Preview Content Area */}
-        <div className="p-4 sm:p-6 overflow-y-auto bg-slate-950 flex-1">
+        <div className="modal-content-area p-4 sm:p-6 overflow-y-auto bg-slate-950 flex-1">
           
           <div
             ref={printRef}

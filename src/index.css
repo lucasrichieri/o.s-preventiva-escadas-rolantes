@@ -28,15 +28,47 @@
   }
 }
 
-/* Custom Print Styles for Window Print */
+/* Custom Print Styles for Window Print (Salvar como PDF) */
 @media print {
-  body {
+  html, body {
     background-color: #ffffff !important;
     color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  header, footer, button, .no-print {
+
+  header, footer, button, .no-print, .modal-top-bar, .email-dialog-overlay, .success-banner {
     display: none !important;
   }
+
+  .modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .modal-container {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+  }
+
+  .modal-content-area {
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
   #pdf-document {
     width: 100% !important;
     max-width: 100% !important;
@@ -44,8 +76,16 @@
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
+    border-radius: 0 !important;
+    page-break-inside: auto;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 8mm 6mm 8mm 6mm;
   }
 }
+
 
 /* Smooth custom scrollbar for slate-200 background */
 ::-webkit-scrollbar {
