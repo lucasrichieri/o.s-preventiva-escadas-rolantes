@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { MONTHS, STAGES } from '../data/tits502pData';
 import { Download, X, FileCheck, Loader2 } from 'lucide-react';
 
@@ -13,6 +13,21 @@ export default function PdfExportModal({
 }) {
   const printRef = useRef(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  // Fechar o modal ao pressionar a tecla ESC
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -52,12 +67,21 @@ export default function PdfExportModal({
     }
   };
 
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose?.();
+    }
+  };
+
   return (
-    <div className="modal-overlay fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="modal-container bg-slate-900 border border-purple-900/60 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+    <div
+      onClick={handleBackdropClick}
+      className="modal-overlay fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+    >
+      <div className="modal-container bg-slate-900 border border-purple-900/60 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
         
         {/* Modal Top Bar */}
-        <div className="modal-top-bar p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0 flex-wrap gap-2">
+        <div className="modal-top-bar p-3.5 sm:p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center shrink-0 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <FileCheck className="w-5 h-5 text-orange-400" />
             <h3 className="text-sm sm:text-base font-extrabold text-white">
@@ -65,13 +89,13 @@ export default function PdfExportModal({
             </h3>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Botão Único: Baixar Arquivo PDF (.pdf) */}
             <button
               onClick={handleDirectDownload}
               disabled={isDownloadingPdf}
               type="button"
-              className="tke-btn-gradient flex items-center gap-2 px-5 py-2.5 text-white text-xs sm:text-sm font-black rounded-xl shadow-lg transition-transform transform hover:scale-105 cursor-pointer disabled:opacity-60"
+              className="tke-btn-gradient flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-white text-xs sm:text-sm font-black rounded-xl shadow-lg transition-transform transform hover:scale-105 cursor-pointer disabled:opacity-60"
             >
               {isDownloadingPdf ? (
                 <>
@@ -86,12 +110,20 @@ export default function PdfExportModal({
               )}
             </button>
 
+            {/* Botão Fechar X destacado */}
             <button
-              onClick={onClose}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose?.();
+              }}
               type="button"
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              aria-label="Fechar visualização"
+              title="Fechar (ESC)"
+              className="flex items-center gap-1.5 px-3 py-2 text-slate-200 hover:text-white bg-slate-800 hover:bg-rose-600 border border-slate-700 hover:border-rose-500 rounded-xl transition-all cursor-pointer font-bold text-xs shadow-md shrink-0"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
+              <span className="hidden sm:inline">Fechar</span>
             </button>
           </div>
         </div>
