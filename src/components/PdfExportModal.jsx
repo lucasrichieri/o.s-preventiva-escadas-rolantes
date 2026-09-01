@@ -288,7 +288,7 @@ export default function PdfExportModal({
                         const photos = itemState.photos || [];
 
                         return (
-                          <div key={act.id} className="p-3 text-[11px] leading-tight">
+                          <div key={act.id} className="p-3 text-[11px] leading-tight break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                             <div className="flex justify-between items-start gap-2">
                               <div className="flex items-start gap-2">
                                 <span className="font-mono font-bold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded border border-purple-300 text-[10px] shrink-0">
@@ -326,7 +326,7 @@ export default function PdfExportModal({
 
                             {/* Attached Photos inside item */}
                             {photos.length > 0 && (
-                              <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 gap-2 break-inside-avoid">
                                 {photos.map((photoUrl, pIdx) => {
                                   const condomínioStr = headerData.cliente ? headerData.cliente.trim() : "Condomínio";
                                   const dataStr = headerData.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : "Data";
@@ -334,7 +334,7 @@ export default function PdfExportModal({
                                   const legendText = `Item ${act.code} - ${condomínioStr} - ${dataStr}${photoNumStr}`;
 
                                   return (
-                                    <div key={pIdx} className="border border-slate-300 rounded overflow-hidden bg-slate-50">
+                                    <div key={pIdx} className="border border-slate-300 rounded overflow-hidden bg-slate-50 shadow-xs">
                                       <img src={photoUrl} alt="Foto" className="w-full h-24 object-cover" />
                                       <div className="p-1 text-[8px] font-mono text-slate-700 bg-slate-100 border-t border-slate-200 truncate">
                                         {legendText}
@@ -354,7 +354,7 @@ export default function PdfExportModal({
             </div>
 
             {/* Signatures Section */}
-            <div className="mt-6 pt-4 border-t-2 border-purple-900">
+            <div className="mt-6 pt-4 border-t-2 border-purple-900 break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
               <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 mb-4 text-center">
                 VALIDAÇÃO E ASSINATURAS DE RESPONSABILIDADE TÉCNICA — TKE
               </h4>
