@@ -17,6 +17,7 @@ export default function PdfExportModal({
   const [emailInput, setEmailInput] = useState('lucasrichieri@gmail.com');
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   if (!isOpen) return null;
 
@@ -43,20 +44,65 @@ export default function PdfExportModal({
     else if (status === 'Não se aplica') totalNaoAplica++;
   });
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     const element = printRef.current;
-    const filename = `Relatorio_TKE_TITS502P_${(headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_')}_${headerData.data || 'Data'}.pdf`;
-    const opt = {
-      margin: [10, 10, 10, 10],
-      filename: filename,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    html2pdf().set(opt).from(element).save();
+    if (!element) return;
+
+    setIsDownloadingPdf(true);
+    const clientSanitized = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9\-_]/g, '_');
+    const filename = `Relatorio_TKE_TITS502P_${clientSanitized}_${headerData.data || 'Data'}.pdf`;
+
+    try {
+      const getHtml2Pdf = () => (typeof html2pdf === 'function' ? html2pdf : html2pdf.default);
+      const pdfFunc = getHtml2Pdf();
+
+      const opt = {
+        margin: [5, 5, 5, 5],
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true, 
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      // Generate blob for direct browser trigger
+      const pdfBlob = await pdfFunc().set(opt).from(element).output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.warn('Falha no Blob URL, tentando save() direto:', err);
+      try {
+        const getHtml2Pdf = () => (typeof html2pdf === 'function' ? html2pdf : html2pdf.default);
+        const pdfFunc = getHtml2Pdf();
+        const opt = {
+          margin: [5, 5, 5, 5],
+          filename: filename,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 1.5, useCORS: true, allowTaint: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        pdfFunc().set(opt).from(element).save();
+      } catch (fallbackErr) {
+        console.error('Invocando impressão nativa:', fallbackErr);
+        window.print();
+      }
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
-  const handleSendEmailSubmit = (e) => {
+  const handleSendEmailSubmit = async (e) => {
     e.preventDefault();
     if (!emailInput) return;
 
@@ -64,9 +110,9 @@ export default function PdfExportModal({
     setSendSuccess(false);
 
     // 1. Gera e baixa o PDF no dispositivo do usuário
-    handleDownloadPdf();
+    await handleDownloadPdf();
 
-    // 2. Prepara e dispara a notificação/link de envio de e-mail
+    // 2. Prepara e dispara o cliente de e-mail (mailto:)
     const clienteName = headerData.cliente || 'Equipamento Plaza';
     const dataVisita = headerData.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : 'Data';
     const subject = encodeURIComponent(`[Relatório TKE] Manutenção Preventiva TITS-502P - ${clienteName}`);
@@ -80,13 +126,9 @@ export default function PdfExportModal({
       `Equipe Técnica TK Elevator (TKE)`
     );
 
-    setTimeout(() => {
-      setIsSending(false);
-      setSendSuccess(true);
-
-      // Dispara o cliente de e-mail (mailto:) como fallback de envio direto
-      window.location.href = `mailto:${emailInput}?subject=${subject}&body=${body}`;
-    }, 1200);
+    setIsSending(false);
+    setSendSuccess(true);
+    window.location.href = `mailto:${emailInput}?subject=${subject}&body=${body}`;
   };
 
   const handleNativePrint = () => {
@@ -123,10 +165,19 @@ export default function PdfExportModal({
             </button>
             <button
               onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
               type="button"
-              className="tke-btn-gradient flex items-center gap-1.5 px-4 py-1.5 text-white text-xs font-bold rounded-lg shadow-md transition-colors cursor-pointer"
+              className="tke-btn-gradient flex items-center gap-1.5 px-4 py-1.5 text-white text-xs font-bold rounded-lg shadow-md transition-colors cursor-pointer disabled:opacity-60"
             >
-              <Download className="w-3.5 h-3.5" /> Baixar PDF
+              {isDownloadingPdf ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando PDF...
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" /> Baixar PDF
+                </>
+              )}
             </button>
             <button
               onClick={onClose}
@@ -212,7 +263,7 @@ export default function PdfExportModal({
               <div>
                 {/* Official styled TKE logo mark */}
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className="font-black text-2xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-700 via-rose-600 to-orange-500 font-mono">
+                  <span className="font-black text-2xl tracking-tighter text-purple-900 font-mono">
                     TK<span className="text-orange-500">E</span>
                   </span>
                   <span className="text-[10px] font-extrabold text-purple-900 tracking-wider uppercase border-l-2 border-slate-300 pl-2">
