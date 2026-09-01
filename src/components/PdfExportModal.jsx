@@ -232,8 +232,8 @@ export default function PdfExportModal({
                 <span className="text-xs font-semibold text-slate-800">{headerData.tecnicos || '-'}</span>
               </div>
               <div>
-                <span className="text-[10px] text-purple-900 font-bold uppercase block">Tipo de Visita</span>
-                <span className="text-xs font-semibold text-slate-800">{headerData.tipoVisita}</span>
+                <span className="text-[10px] text-purple-900 font-bold uppercase block">Escopo da Manutenção</span>
+                <span className="text-xs font-bold text-slate-800">Preventiva Periódica Unificada ({mesObj.name})</span>
               </div>
               <div>
                 <span className="text-[10px] text-purple-900 font-bold uppercase block">Status de Segurança</span>
@@ -291,9 +291,18 @@ export default function PdfExportModal({
                           <div key={act.id} className="p-3 text-[11px] leading-tight">
                             <div className="flex justify-between items-start gap-2">
                               <div className="flex items-start gap-2">
-                                <span className="font-mono font-bold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded border border-purple-300 text-[10px]">
+                                <span className="font-mono font-bold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded border border-purple-300 text-[10px] shrink-0">
                                   {act.code}
                                 </span>
+                                {act.isMonthly ? (
+                                  <span className="text-[8px] bg-blue-50 text-blue-800 px-1 py-0.5 rounded border border-blue-200 font-bold uppercase shrink-0">
+                                    Mensal
+                                  </span>
+                                ) : (
+                                  <span className="text-[8px] bg-amber-50 text-amber-900 px-1 py-0.5 rounded border border-amber-300 font-bold uppercase shrink-0">
+                                    Periódica
+                                  </span>
+                                )}
                                 <div>
                                   <p className="font-semibold text-slate-900">{act.description}</p>
                                   {itemState.comment && (

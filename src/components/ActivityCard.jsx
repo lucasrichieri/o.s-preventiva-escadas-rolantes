@@ -65,9 +65,13 @@ export default function ActivityCard({ activity, itemState, onItemChange, client
               <span className="text-[10px] text-orange-600 uppercase font-extrabold tracking-wider">
                 {activity.subgroup}
               </span>
-              {!activity.isMonthly && (
-                <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded border border-purple-300 font-bold">
-                  Complementar TKE
+              {activity.isMonthly ? (
+                <span className="text-[10px] bg-blue-100 text-blue-900 px-2 py-0.5 rounded border border-blue-200 font-extrabold">
+                  Rotina Mensal
+                </span>
+              ) : (
+                <span className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded border border-amber-300 font-extrabold">
+                  Programada do Mês
                 </span>
               )}
             </div>

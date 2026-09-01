@@ -1,11 +1,19 @@
 import React from 'react';
-import { MONTHS } from '../data/tits502pData';
-import { Building2, MapPin, Wrench, Calendar, UserCheck, Sparkles, FileText } from 'lucide-react';
+import { MONTHS, ACTIVITIES } from '../data/tits502pData';
+import { Building2, MapPin, Wrench, Calendar, UserCheck, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
   const handleChange = (field, value) => {
     setHeaderData(prev => ({ ...prev, [field]: value }));
   };
+
+  const selectedMonth = headerData.mesRef || 1;
+  const currentMonthObj = MONTHS.find(m => m.id === selectedMonth) || MONTHS[0];
+
+  // Cálculo automático de itens unificados para o mês
+  const monthlyCount = ACTIVITIES.filter(a => a.isMonthly).length;
+  const periodicCount = ACTIVITIES.filter(a => !a.isMonthly && a.months && a.months.includes(selectedMonth)).length;
+  const totalCount = monthlyCount + periodicCount;
 
   return (
     <div className="glass-card p-6 mb-8 rounded-2xl bg-white/95 border border-slate-200 shadow-xl backdrop-blur-md relative overflow-hidden">
@@ -21,7 +29,7 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1 tracking-tight">
-            Relatório Fotográfico de Manutenção Preventiva
+            Relatório Fotográfico de Manutenção Preventiva Unificada
           </h2>
           <p className="text-slate-500 text-xs sm:text-sm mt-0.5 font-medium">
             Escadas e Esteiras Rolantes - TK Elevator
@@ -117,7 +125,7 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
         <div>
           <label className="block text-xs font-extrabold text-orange-600 mb-1.5 flex items-center justify-between">
             <span>Mês de Referência (Matriz TKE)</span>
-            <span className="text-[10px] text-purple-700 font-bold">Filtra Atividades</span>
+            <span className="text-[10px] bg-orange-100 text-orange-900 font-extrabold px-1.5 py-0.5 rounded">Unifica Cronograma</span>
           </label>
           <select
             value={headerData.mesRef}
@@ -132,31 +140,35 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
           </select>
         </div>
 
-        {/* Tipo de Visita */}
-        <div className="md:col-span-2 lg:col-span-3 pt-3 border-t border-slate-200 flex flex-wrap items-center gap-6">
-          <span className="text-xs font-bold text-slate-700">Tipo de Visita:</span>
-          <label className="flex items-center gap-2 text-xs sm:text-sm text-slate-800 font-semibold cursor-pointer">
-            <input
-              type="radio"
-              name="tipoVisita"
-              value="Mensal"
-              checked={headerData.tipoVisita === 'Mensal'}
-              onChange={() => handleChange('tipoVisita', 'Mensal')}
-              className="accent-purple-700 w-4 h-4"
-            />
-            <span>Mensal</span>
-          </label>
-          <label className="flex items-center gap-2 text-xs sm:text-sm text-slate-800 font-semibold cursor-pointer">
-            <input
-              type="radio"
-              name="tipoVisita"
-              value="Complementar (não mensal)"
-              checked={headerData.tipoVisita === 'Complementar (não mensal)'}
-              onChange={() => handleChange('tipoVisita', 'Complementar (não mensal)')}
-              className="accent-purple-700 w-4 h-4"
-            />
-            <span>Complementar (não mensal)</span>
-          </label>
+        {/* Escopo Unificado da Visita */}
+        <div className="md:col-span-2 lg:col-span-3 pt-3 border-t border-slate-200">
+          <div className="bg-gradient-to-r from-purple-900/10 via-orange-500/10 to-purple-900/10 border border-purple-300/80 p-3.5 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="bg-purple-950 text-amber-300 font-mono font-black text-[10px] px-2.5 py-1 rounded-md tracking-wider">
+                ESCOPO UNIFICADO
+              </span>
+              <div>
+                <h4 className="text-xs sm:text-sm font-black text-slate-900">
+                  Manutenção Preventiva Periódica — {currentMonthObj.name}
+                </h4>
+                <p className="text-[11px] text-slate-600 font-medium">
+                  Contempla atividades de rotina mensal + atividades complementares programadas para este mês.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-bold flex-wrap">
+              <span className="bg-blue-100 text-blue-900 px-2.5 py-1 rounded-lg border border-blue-300">
+                {monthlyCount} Mensais
+              </span>
+              <span className="bg-amber-100 text-amber-900 px-2.5 py-1 rounded-lg border border-amber-300">
+                {periodicCount} Periódicas ({currentMonthObj.short})
+              </span>
+              <span className="bg-purple-950 text-white px-2.5 py-1 rounded-lg shadow-sm">
+                Total: {totalCount} Itens
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
