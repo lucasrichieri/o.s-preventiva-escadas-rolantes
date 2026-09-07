@@ -187,10 +187,11 @@ export default function App() {
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => setIsPdfModalOpen(true)}
-            className="tke-btn-gradient flex items-center gap-2 px-5 py-2.5 text-white font-black text-xs sm:text-sm rounded-xl shadow-md cursor-pointer transform hover:-translate-y-0.5"
+            className="tke-btn-gradient flex items-center gap-2 px-4 sm:px-5 py-2.5 text-white font-black text-xs sm:text-sm rounded-xl shadow-md cursor-pointer transform hover:-translate-y-0.5"
           >
             <Download className="w-4 h-4 text-amber-200" />
-            Visualizar e Baixar PDF
+            <span className="hidden sm:inline">Exportar / Enviar PDF</span>
+            <span className="sm:hidden">Relatório PDF</span>
           </button>
         </div>
       </header>
@@ -255,10 +256,10 @@ export default function App() {
         <div className="flex items-center justify-center pt-4 pb-12">
           <button
             onClick={() => setIsPdfModalOpen(true)}
-            className="tke-btn-gradient flex items-center gap-3 px-10 py-4 text-white font-black text-base rounded-2xl shadow-xl transition-all cursor-pointer transform hover:-translate-y-1 active:translate-y-0"
+            className="tke-btn-gradient flex items-center gap-3 px-8 sm:px-10 py-4 text-white font-black text-sm sm:text-base rounded-2xl shadow-xl transition-all cursor-pointer transform hover:-translate-y-1 active:translate-y-0"
           >
             <Download className="w-5 h-5 text-amber-200" />
-            Visualizar e Baixar Relatório (PDF)
+            <span>Visualizar, Baixar e Enviar Relatório (PDF)</span>
           </button>
         </div>
 

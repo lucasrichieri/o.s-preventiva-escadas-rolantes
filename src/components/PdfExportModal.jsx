@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { MONTHS, STAGES } from '../data/tits502pData';
-import { Download, X, FileCheck, Loader2 } from 'lucide-react';
+import { Download, X, FileCheck, Loader2, Mail, Send, CheckCircle2, AlertCircle } from 'lucide-react';
+import { sendReportEmail } from '../utils/emailService';
 
 export default function PdfExportModal({
   isOpen,
@@ -13,6 +14,10 @@ export default function PdfExportModal({
 }) {
   const printRef = useRef(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isEmailPanelOpen, setIsEmailPanelOpen] = useState(false);
+  const [toEmail, setToEmail] = useState(() => localStorage.getItem('tke_last_email') || '');
+  const [emailStatus, setEmailStatus] = useState('idle'); // 'idle' | 'sending' | 'success' | 'error'
+  const [emailFeedback, setEmailFeedback] = useState('');
 
   // Fechar o modal ao pressionar a tecla ESC
   useEffect(() => {
@@ -67,6 +72,80 @@ export default function PdfExportModal({
     }
   };
 
+  // Envio por E-mail via SMTP com PDF Anexo
+  const handleSendEmail = async (e) => {
+    e?.preventDefault();
+    if (!toEmail || !toEmail.includes('@')) {
+      setEmailStatus('error');
+      setEmailFeedback('Por favor, informe um endereço de e-mail válido.');
+      return;
+    }
+
+    if (!printRef.current) {
+      setEmailStatus('error');
+      setEmailFeedback('Erro: o conteúdo do relatório não foi carregado.');
+      return;
+    }
+
+    setEmailStatus('sending');
+    setEmailFeedback('Gerando o arquivo PDF do relatório...');
+
+    // Gerar o PDF com validação e múltiplos fallbacks
+    let pdfBase64 = null;
+    const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
+    const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const nomeMes = MESES[(headerData.mesRef || 1) - 1] || 'Janeiro';
+    const pdfFilename = `Relatorio_TKE_${clienteSafe}_${nomeMes}.pdf`;
+
+    try {
+      const { generatePdfBase64 } = await import('../utils/pdfGenerator');
+      pdfBase64 = await generatePdfBase64(printRef.current, pdfFilename);
+
+      if (!pdfBase64) {
+        console.warn('⚠️ Primeira tentativa retornou nulo, tentando método direto no elemento...');
+        const html2pdfModule = await import('html2pdf.js');
+        const html2pdf = html2pdfModule.default || html2pdfModule;
+        const opt = {
+          margin: [8, 6, 8, 6],
+          filename: pdfFilename,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 1.75, useCORS: true, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        pdfBase64 = await html2pdf().set(opt).from(printRef.current).output('datauristring');
+      }
+    } catch (pdfErr) {
+      console.error('Erro ao gerar PDF para e-mail:', pdfErr);
+    }
+
+    if (!pdfBase64) {
+      setEmailStatus('error');
+      setEmailFeedback('Erro ao renderizar o PDF do relatório. O e-mail não foi disparado para evitar envio sem o arquivo anexo. Tente novamente.');
+      return;
+    }
+
+    setEmailFeedback('Disparando e-mail via servidor SMTP com o PDF anexado...');
+
+    try {
+      localStorage.setItem('tke_last_email', toEmail);
+      const res = await sendReportEmail({
+        toEmail,
+        headerData,
+        activeActivities,
+        itemStates,
+        pdfBase64,       // Passa o Base64 já gerado
+        pdfFilename,     // Nome do arquivo
+        pdfElement: null // Não precisa gerar novamente
+      });
+
+      setEmailStatus('success');
+      setEmailFeedback(res.message || `Relatório e PDF enviados com sucesso para ${toEmail}!`);
+    } catch (err) {
+      setEmailStatus('error');
+      setEmailFeedback(err.message || 'Falha ao conectar ao servidor SMTP. Verifique as credenciais no .env.');
+    }
+  };
+
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
       onClose?.();
@@ -89,8 +168,28 @@ export default function PdfExportModal({
             </h3>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Botão Único: Baixar Arquivo PDF (.pdf) */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            {/* Botão Enviar por E-mail (SMTP) */}
+            <button
+              onClick={() => {
+                setIsEmailPanelOpen(!isEmailPanelOpen);
+                if (emailStatus === 'success') {
+                  setEmailStatus('idle');
+                  setEmailFeedback('');
+                }
+              }}
+              type="button"
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all cursor-pointer ${
+                isEmailPanelOpen
+                  ? 'bg-purple-600 text-white border border-purple-400'
+                  : 'bg-slate-800 hover:bg-slate-700 text-purple-200 border border-purple-700/50'
+              }`}
+            >
+              <Mail className="w-4 h-4 text-purple-300" />
+              <span>Enviar por E-mail</span>
+            </button>
+
+            {/* Botão: Baixar Arquivo PDF (.pdf) */}
             <button
               onClick={handleDirectDownload}
               disabled={isDownloadingPdf}
@@ -100,17 +199,17 @@ export default function PdfExportModal({
               {isDownloadingPdf ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-amber-200" />
-                  Gerando e Baixando PDF...
+                  Gerando PDF...
                 </>
               ) : (
                 <>
                   <Download className="w-4 h-4 text-amber-200" />
-                  Baixar Arquivo PDF (.pdf)
+                  Baixar PDF
                 </>
               )}
             </button>
 
-            {/* Botão Fechar X destacado */}
+            {/* Botão Fechar X */}
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -127,6 +226,74 @@ export default function PdfExportModal({
             </button>
           </div>
         </div>
+
+        {/* Email Sending Expandable Drawer */}
+        {isEmailPanelOpen && (
+          <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-slate-950 p-4 border-b border-purple-800/50 shadow-inner">
+            <form onSubmit={handleSendEmail} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="flex-1 relative">
+                <label className="block text-[11px] font-bold text-purple-200 uppercase tracking-wider mb-1">
+                  Destinatário do Relatório (SMTP):
+                </label>
+                <div className="flex items-center bg-slate-950 border border-purple-700/60 rounded-xl px-3 py-2 focus-within:border-orange-400 focus-within:ring-1 focus-within:ring-orange-400">
+                  <Mail className="w-4 h-4 text-purple-400 mr-2 shrink-0" />
+                  <input
+                    type="email"
+                    value={toEmail}
+                    onChange={(e) => setToEmail(e.target.value)}
+                    placeholder="ex: cliente@condominio.com ou gestor@tke.com"
+                    required
+                    className="w-full bg-transparent text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="sm:self-end">
+                <button
+                  type="submit"
+                  disabled={emailStatus === 'sending'}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {emailStatus === 'sending' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                      Enviando via SMTP...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 text-slate-950" />
+                      Disparar E-mail com PDF
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {/* Email Feedback Alerts */}
+            {emailStatus === 'success' && (
+              <div className="mt-3 p-3 bg-emerald-950/80 border border-emerald-500/60 rounded-xl flex items-start gap-2.5 text-emerald-200 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="font-bold block text-emerald-300">Sucesso no envio!</strong>
+                  <span>{emailFeedback}</span>
+                </div>
+              </div>
+            )}
+
+            {emailStatus === 'error' && (
+              <div className="mt-3 p-3 bg-rose-950/80 border border-rose-500/60 rounded-xl flex items-start gap-2.5 text-rose-200 text-xs">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="font-bold block text-rose-300">Aviso / Erro no envio SMTP:</strong>
+                  <span>{emailFeedback}</span>
+                  <p className="mt-1 text-[11px] text-rose-300/80">
+                    💡 Certifique-se de preencher as variáveis <code>SMTP_USER</code> e <code>SMTP_PASS</code> no arquivo <code>.env</code>.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Printable / Preview Content Area */}
         <div className="modal-content-area p-4 sm:p-6 overflow-y-auto bg-slate-950 flex-1">

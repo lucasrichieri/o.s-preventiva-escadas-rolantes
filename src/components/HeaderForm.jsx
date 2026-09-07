@@ -1,6 +1,6 @@
 import React from 'react';
 import { MONTHS, ACTIVITIES } from '../data/tits502pData';
-import { Building2, MapPin, Wrench, Calendar, UserCheck, Sparkles, FileText, CheckCircle2 } from 'lucide-react';
+import { Building2, MapPin, Wrench, Calendar, UserCheck, Sparkles, FileText } from 'lucide-react';
 
 export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
   const handleChange = (field, value) => {

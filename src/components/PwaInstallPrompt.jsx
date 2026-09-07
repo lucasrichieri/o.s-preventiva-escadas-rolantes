@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, Download, X, WifiOff, CheckCircle } from 'lucide-react';
+import { Smartphone, Download, X, WifiOff } from 'lucide-react';
 
 export default function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstallable, setIsInstallable] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isStandalone] = useState(() => 
+    typeof window !== 'undefined' ? (window.matchMedia('(display-mode: standalone)').matches || window.navigator?.standalone === true) : false
+  );
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // Detect if already installed / running in standalone mode
-    const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    setIsStandalone(checkStandalone);
 
     // Listen for install prompt event
     const handleBeforeInstallPrompt = (e) => {

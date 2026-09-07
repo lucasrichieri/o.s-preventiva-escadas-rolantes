@@ -1,10 +1,26 @@
 /**
- * Serviço de Envio Automático de E-mail com PDF Anexo - Relatório TKE (TITS-502P)
+ * Serviço de Envio Automático de E-mail via SMTP com Relatório PDF Anexo
+ * Norma TITS-502P - TK Elevator
  */
 
-export async function sendReportEmail({ toEmail, headerData, activeActivities, itemStates, pdfElement }) {
-  const clienteName = headerData.cliente || 'Condomínio Plaza';
-  const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
+/**
+ * Envia o relatório de manutenção por e-mail com o PDF em Base64 como anexo via SMTP (Nodemailer)
+ * 
+ * O pdfBase64 deve ser gerado pelo componente chamador (enquanto o elemento está visível no DOM)
+ * e passado diretamente. pdfElement é ignorado se pdfBase64 já estiver preenchido.
+ */
+export async function sendReportEmail({
+  toEmail,
+  headerData,
+  activeActivities,
+  itemStates,
+  pdfBase64 = null,   // Base64 já gerado pelo componente (preferido)
+  pdfFilename = null, // Nome do arquivo PDF
+  pdfElement = null,  // Elemento DOM (fallback, apenas se pdfBase64 for null)
+  customSubject
+}) {
+  const clienteName = headerData.cliente || 'Equipamento';
+  const clienteSafe = clienteName.replace(/[^a-zA-Z0-9]/g, '_');
   const dataVisita = headerData.data
     ? new Date(headerData.data).toLocaleDateString('pt-BR')
     : new Date().toLocaleDateString('pt-BR');
@@ -33,9 +49,9 @@ export async function sendReportEmail({ toEmail, headerData, activeActivities, i
 
   const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const nomeMes = MESES[(mesRef - 1)] || 'Janeiro';
-  const pdfFilename = `Relatorio_TKE_${clienteSafe}.pdf`;
+  const resolvedFilename = pdfFilename || `Relatorio_TKE_${clienteSafe}_${nomeMes}.pdf`;
 
-  const subject = `[TKE] Relatório de Manutenção Preventiva - ${clienteName} - ${nomeMes}/${new Date().getFullYear()}`;
+  const subject = customSubject || `[TKE] Relatório de Manutenção Preventiva - ${clienteName} - ${nomeMes}/${new Date().getFullYear()}`;
 
   const plainText = `
 [TKE] Relatório de Manutenção Preventiva
@@ -53,22 +69,11 @@ RESUMO EXECUTIVO:
 • Não Conformes: ${naoConformes}
 • Não se Aplica: ${naoAplica}
 
-${naoConformesItens.length > 0 ? 'NÃO-CONFORMIDADES DETECTADAS:\n' + naoConformesItens.join('\n') + '\n' : ''}
-O arquivo PDF com todos os dados da inspeção foi gerado pelo sistema.
+${naoConformesItens.length > 0 ? 'NÃO-CONFORMIDADES / OBSERVAÇÕES:\n' + naoConformesItens.join('\n') + '\n' : ''}
+O arquivo oficial em formato PDF (${resolvedFilename}) foi gerado e está anexado a este e-mail.
 
 TK Elevator Corporation — TITS-502P
   `.trim();
-
-  // 1. Gerar o arquivo PDF real em formato Blob
-  let pdfBlob = null;
-  if (pdfElement) {
-    try {
-      const { generatePdfBlob } = await import('./pdfGenerator');
-      pdfBlob = await generatePdfBlob(pdfElement, pdfFilename);
-    } catch (e) {
-      console.warn('Aviso: Não foi possível gerar blob do PDF para anexo:', e);
-    }
-  }
 
   const formDataFields = {
     'Nome do Relatório': `Manutenção Preventiva TKE - ${clienteName}`,
@@ -86,100 +91,64 @@ TK Elevator Corporation — TITS-502P
       : 'Nenhuma detectada (equipamento 100% operacional)',
   };
 
-  // =========================================================
-  // Método 1: Vercel Serverless API (/api/send-email)
-  // =========================================================
-  try {
-    const apiRes = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        toEmail,
-        subject,
-        text: plainText,
-        data: formDataFields
-      })
-    });
-    if (apiRes.ok) {
-      const apiData = await apiRes.json().catch(() => ({}));
-      if (apiData.success) {
-        return { success: true, method: 'vercel_api', message: 'E-mail enviado com sucesso via servidor!' };
-      }
+  // Se não foi passado pdfBase64 pronto mas foi passado pdfElement (fallback)
+  if (!pdfBase64 && pdfElement) {
+    try {
+      const { generatePdfBase64 } = await import('./pdfGenerator');
+      pdfBase64 = await generatePdfBase64(pdfElement, resolvedFilename);
+    } catch (e) {
+      console.warn('Aviso: Não foi possível gerar o PDF para o anexo:', e);
     }
-  } catch (err) {
-    console.warn('Tentativa via /api/send-email falhou ou em ambiente local:', err);
   }
 
-  // =========================================================
-  // Método 2: FormSubmit direto com FormData / Anexo
-  // =========================================================
-  try {
-    const formData = new FormData();
-    formData.append('_subject', subject);
-    formData.append('_template', 'table');
-    formData.append('_captcha', 'false');
-    formData.append('_replyto', 'noreply@tkelevator.com');
-    Object.entries(formDataFields).forEach(([key, val]) => {
-      formData.append(key, val);
-    });
-    formData.append('Resumo O.S.', plainText);
-
-    if (pdfBlob) {
-      const pdfFile = new File([pdfBlob], pdfFilename, { type: 'application/pdf' });
-      formData.append('attachment', pdfFile, pdfFilename);
-    }
-
-    const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(toEmail)}`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-      },
-      body: formData,
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && (data.success === 'true' || data.success === true)) {
-      return { success: true, method: 'formsubmit_multipart', message: 'E-mail enviado com sucesso!' };
-    }
-  } catch (err) {
-    console.warn('Falha no FormSubmit com anexo:', err);
+  if (pdfBase64 && typeof pdfBase64 === 'string' && pdfBase64.length > 500) {
+    console.log(`📎 PDF validado e pronto para envio: ${resolvedFilename} (${(pdfBase64.length / 1024).toFixed(1)} KB base64)`);
+  } else {
+    throw new Error('O arquivo PDF do relatório não foi gerado. O envio foi cancelado para garantir que o anexo seja incluído no e-mail.');
   }
 
-  // =========================================================
-  // Método 3: FormSubmit simples em JSON (sem anexo binário)
-  // =========================================================
+  // Disparo via Servidor SMTP (API Backend / Serverless)
+  let apiUrl = import.meta.env.VITE_API_URL || '/api';
+  if (apiUrl === 'http://localhost:3000/api' || apiUrl === 'http://localhost:3000') {
+    apiUrl = '/api';
+  }
+  const endpoint = apiUrl.endsWith('/send-email')
+    ? apiUrl
+    : `${apiUrl.replace(/\/+$/, '')}/send-email`;
+
   try {
-    const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(toEmail)}`, {
+    const apiRes = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({
-        _subject: subject,
-        _template: 'table',
-        _captcha: 'false',
-        ...formDataFields,
-        'Resumo O.S.': plainText
-      }),
+        toEmail: toEmail?.trim(),
+        subject,
+        text: plainText,
+        pdfBase64,
+        pdfFilename: resolvedFilename,
+        data: formDataFields
+      })
     });
 
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && (data.success === 'true' || data.success === true)) {
-      return { success: true, method: 'formsubmit_json', message: 'E-mail enviado com sucesso!' };
-    }
-  } catch (err) {
-    console.warn('Falha no FormSubmit JSON:', err);
-  }
+    const apiData = await apiRes.json().catch(() => ({}));
 
-  // =========================================================
-  // Método 4: Fallback cliente nativo de email (mailto)
-  // =========================================================
-  try {
-    const mailtoLink = `mailto:${encodeURIComponent(toEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(plainText)}`;
-    window.open(mailtoLink, '_blank');
-    return { success: true, method: 'mailto', message: 'Abrindo cliente de e-mail.' };
-  } catch (e) {
-    return { success: true, method: 'fallback', message: 'Dados da O.S. prontos.' };
+    if (!apiRes.ok || !apiData.success) {
+      throw new Error(apiData.error || `Erro ${apiRes.status} no servidor de e-mail.`);
+    }
+
+    return {
+      success: true,
+      method: 'smtp',
+      message: apiData.message || `E-mail com relatório PDF enviado com sucesso para ${toEmail}!`
+    };
+  } catch (err) {
+    console.error('Falha no envio via SMTP:', err);
+    if (err.name === 'TypeError' && (err.message.includes('fetch') || err.message.includes('NetworkError'))) {
+      throw new Error('Falha de conexão com a API de envio (Failed to fetch). Verifique se o Vite dev server está em execução.');
+    }
+    throw err;
   }
 }
