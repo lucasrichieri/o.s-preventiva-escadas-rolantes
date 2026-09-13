@@ -1,262 +1,168 @@
 /**
- * Utilitário de Geração e Download Direto de Arquivo PDF (.pdf)
- * Utiliza html2pdf.js com clonagem isolada no viewport
+ * Utilitário Oficial de Geração de PDF e Anexo para E-mail
+ * TK Elevator (TKE) - Norma TITS-502P
+ *
+ * Utiliza html2canvas e jsPDF diretamente para garantir renderização perfeita,
+ * suporte a múltiplas páginas e exportação confiável em Base64 Data URI e Blob.
  */
+
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 /**
- * Gera os dados Base64 do PDF (Data URI) para envio como anexo de e-mail
+ * Converte um elemento do DOM em um documento jsPDF
+ * @param {HTMLElement} element 
+ * @param {string} filename 
+ * @returns {Promise<jsPDF>}
+ */
+async function buildJsPdfFromElement(element, filename = 'Relatorio_TKE.pdf') {
+  if (!element) {
+    throw new Error('Elemento DOM não fornecido para geração do PDF.');
+  }
+
+  // Captura o elemento com html2canvas em alta resolução (scale 2)
+  const canvas = await html2canvas(element, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: '#ffffff',
+    scrollY: 0,
+    scrollX: 0,
+    logging: false,
+    imageTimeout: 15000,
+    onclone: (clonedDoc, clonedElement) => {
+      // Garante largura consistente e fundo branco
+      clonedElement.style.maxWidth = '210mm';
+      clonedElement.style.width = '210mm';
+      clonedElement.style.boxShadow = 'none';
+      clonedElement.style.margin = '0 auto';
+      clonedElement.style.backgroundColor = '#ffffff';
+    }
+  });
+
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: true
+  });
+
+  // Metadados do documento
+  pdf.setDocumentProperties({
+    title: filename.replace('.pdf', ''),
+    subject: 'Relatório Fotográfico de Manutenção Preventiva TITS-502P',
+    author: 'TK Elevator (TKE)',
+    creator: 'Sistema de Relatórios O.S. TKE'
+  });
+
+  const marginMm = 6;
+  const pdfPageWidthMm = 210;
+  const pdfPageHeightMm = 297;
+  const contentWidthMm = pdfPageWidthMm - (marginMm * 2); // 198 mm
+  const contentHeightMm = pdfPageHeightMm - (marginMm * 2); // 285 mm
+
+  // Altura total do documento em mm calculada a partir da proporção do canvas
+  const totalDocHeightMm = (canvas.height * contentWidthMm) / canvas.width;
+
+  // Se cabe em uma única página A4
+  if (totalDocHeightMm <= contentHeightMm) {
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    pdf.addImage(imgData, 'JPEG', marginMm, marginMm, contentWidthMm, totalDocHeightMm, undefined, 'FAST');
+    return pdf;
+  }
+
+  // Para documentos longos (múltiplas páginas), fatia o canvas com precisão
+  const sliceHeightPx = Math.floor((canvas.width * contentHeightMm) / contentWidthMm);
+  let positionPx = 0;
+  let pageIndex = 0;
+
+  while (positionPx < canvas.height) {
+    const currentSliceHeightPx = Math.min(sliceHeightPx, canvas.height - positionPx);
+    
+    // Canvas temporário para a página atual
+    const pageCanvas = document.createElement('canvas');
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = currentSliceHeightPx;
+    const ctx = pageCanvas.getContext('2d');
+
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      ctx.drawImage(
+        canvas,
+        0, positionPx, canvas.width, currentSliceHeightPx,
+        0, 0, canvas.width, currentSliceHeightPx
+      );
+    }
+
+    const sliceImgData = pageCanvas.toDataURL('image/jpeg', 0.95);
+    const sliceHeightMm = (currentSliceHeightPx * contentWidthMm) / canvas.width;
+
+    if (pageIndex > 0) {
+      pdf.addPage();
+    }
+
+    pdf.addImage(sliceImgData, 'JPEG', marginMm, marginMm, contentWidthMm, sliceHeightMm, undefined, 'FAST');
+
+    positionPx += sliceHeightPx;
+    pageIndex++;
+  }
+
+  return pdf;
+}
+
+/**
+ * Gera os dados Base64 do PDF (Data URI) para anexo em e-mail
+ * @param {HTMLElement} element 
+ * @param {string} filename 
+ * @returns {Promise<string|null>}
  */
 export async function generatePdfBase64(element, filename = 'Relatorio_TKE.pdf') {
-  if (!element) {
-    console.error('Elemento não fornecido para generatePdfBase64');
+  try {
+    const pdf = await buildJsPdfFromElement(element, filename);
+    const dataUri = pdf.output('datauristring', { filename });
+    
+    if (dataUri && typeof dataUri === 'string' && dataUri.length > 500) {
+      console.log(`📎 PDF Base64 gerado com sucesso: ${filename} (${(dataUri.length / 1024).toFixed(1)} KB)`);
+      return dataUri;
+    }
+    
+    console.error('Base64 gerado é inválido ou vazio.');
+    return null;
+  } catch (err) {
+    console.error('Erro na geração do PDF Base64:', err);
     return null;
   }
-
-  const html2pdfModule = await import('html2pdf.js');
-  const html2pdf = html2pdfModule.default || html2pdfModule;
-
-  const opt = {
-    margin: [8, 6, 8, 6],
-    filename: filename,
-    image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: {
-      scale: 1.75,
-      useCORS: true,
-      allowTaint: true,
-      letterRendering: true,
-      backgroundColor: '#ffffff',
-      scrollY: 0,
-      scrollX: 0,
-      logging: false
-    },
-    jsPDF: {
-      unit: 'mm',
-      format: 'a4',
-      orientation: 'portrait'
-    },
-    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-  };
-
-  // Método 1: Tentar diretamente no elemento fornecido
-  try {
-    const worker = html2pdf().set(opt).from(element);
-    const dataUri = await worker.output('datauristring');
-    if (dataUri && typeof dataUri === 'string' && dataUri.startsWith('data:application/pdf') && dataUri.length > 500) {
-      console.log(`📎 PDF Base64 gerado com sucesso (Método Direto): ${(dataUri.length / 1024).toFixed(1)} KB`);
-      return dataUri;
-    }
-  } catch (err1) {
-    console.warn('Método 1 falhou, tentando Método 2 (Blob):', err1);
-  }
-
-  // Método 2: Output blob no elemento direto
-  try {
-    const blob = await html2pdf().set(opt).from(element).outputPdf('blob');
-    if (blob && blob.size > 200) {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      if (base64 && typeof base64 === 'string' && base64.length > 500) {
-        console.log(`📎 PDF Base64 gerado com sucesso (Método Blob): ${(base64.length / 1024).toFixed(1)} KB`);
-        return base64;
-      }
-    }
-  } catch (err2) {
-    console.warn('Método 2 falhou, tentando Método 3 (Clone Isolado):', err2);
-  }
-
-  // Método 3: Clone isolado no DOM
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '0';
-  container.style.width = '794px';
-  container.style.opacity = '0.01';
-  container.style.pointerEvents = 'none';
-  container.style.zIndex = '-9999';
-  container.style.overflow = 'visible';
-
-  const clone = element.cloneNode(true);
-  clone.style.width = '794px';
-  clone.style.maxWidth = '794px';
-  clone.style.backgroundColor = '#ffffff';
-  clone.style.color = '#000000';
-  clone.style.boxShadow = 'none';
-  clone.style.margin = '0';
-  clone.style.padding = '24px';
-  clone.style.borderRadius = '0';
-  container.appendChild(clone);
-  document.body.appendChild(container);
-
-  try {
-    const cloneOpt = {
-      ...opt,
-      html2canvas: {
-        ...opt.html2canvas,
-        windowWidth: 800
-      }
-    };
-    const dataUri = await html2pdf().set(cloneOpt).from(clone).outputPdf('datauristring');
-    if (dataUri && typeof dataUri === 'string' && dataUri.length > 500) {
-      console.log(`📎 PDF Base64 gerado com sucesso (Método Clone): ${(dataUri.length / 1024).toFixed(1)} KB`);
-      return dataUri;
-    }
-
-    const fallbackBlob = await html2pdf().set(cloneOpt).from(clone).outputPdf('blob');
-    if (fallbackBlob && fallbackBlob.size > 200) {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(fallbackBlob);
-      });
-      console.log(`📎 PDF Base64 gerado com sucesso (Método Clone Blob): ${(base64.length / 1024).toFixed(1)} KB`);
-      return base64;
-    }
-  } catch (err3) {
-    console.error('Erro em todos os métodos de geração do Base64 do PDF:', err3);
-  } finally {
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
-    }
-  }
-
-  return null;
 }
 
 /**
  * Gera um objeto Blob do PDF
+ * @param {HTMLElement} element 
+ * @param {string} filename 
+ * @returns {Promise<Blob|null>}
  */
 export async function generatePdfBlob(element, filename = 'Relatorio_TKE.pdf') {
-  if (!element) return null;
-
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '0';
-  container.style.width = '794px';
-  container.style.opacity = '0.01';
-  container.style.pointerEvents = 'none';
-  container.style.zIndex = '-9999';
-  container.style.overflow = 'visible';
-
-  const clone = element.cloneNode(true);
-  clone.style.width = '794px';
-  clone.style.maxWidth = '794px';
-  clone.style.backgroundColor = '#ffffff';
-  clone.style.color = '#000000';
-  clone.style.boxShadow = 'none';
-  clone.style.margin = '0';
-  clone.style.padding = '24px';
-  clone.style.borderRadius = '0';
-  container.appendChild(clone);
-  document.body.appendChild(container);
-
   try {
-    const html2pdfModule = await import('html2pdf.js');
-    const html2pdf = html2pdfModule.default || html2pdfModule;
-
-    const opt = {
-      margin: [8, 6, 8, 6],
-      filename: filename,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        letterRendering: true,
-        backgroundColor: '#ffffff',
-        scrollY: 0,
-        scrollX: 0,
-        windowWidth: 800,
-        logging: false
-      },
-      jsPDF: {
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait'
-      },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-
-    const blob = await html2pdf().set(opt).from(clone).outputPdf('blob');
+    const pdf = await buildJsPdfFromElement(element, filename);
+    const blob = pdf.output('blob', { filename });
     return blob;
   } catch (err) {
     console.error('Erro ao gerar Blob do PDF:', err);
     return null;
-  } finally {
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
-    }
   }
 }
 
 /**
  * Realiza o download direto do PDF para a máquina do usuário
+ * @param {HTMLElement} element 
+ * @param {string} filename 
  */
 export async function downloadReportPdf(element, filename = 'Relatorio_TKE.pdf') {
-  if (!element) {
-    window.print();
-    return;
-  }
-
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '0';
-  container.style.width = '794px';
-  container.style.opacity = '0.01';
-  container.style.pointerEvents = 'none';
-  container.style.zIndex = '-9999';
-  container.style.overflow = 'visible';
-
-  const clone = element.cloneNode(true);
-  clone.style.width = '794px';
-  clone.style.maxWidth = '794px';
-  clone.style.backgroundColor = '#ffffff';
-  clone.style.color = '#000000';
-  clone.style.boxShadow = 'none';
-  clone.style.margin = '0';
-  clone.style.padding = '24px';
-  clone.style.borderRadius = '0';
-  container.appendChild(clone);
-  document.body.appendChild(container);
-
   try {
-    const html2pdfModule = await import('html2pdf.js');
-    const html2pdf = html2pdfModule.default || html2pdfModule;
-
-    const opt = {
-      margin: [8, 6, 8, 6],
-      filename: filename,
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        letterRendering: true,
-        backgroundColor: '#ffffff',
-        scrollY: 0,
-        scrollX: 0,
-        windowWidth: 800,
-        logging: false
-      },
-      jsPDF: {
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait'
-      },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-
-    await html2pdf().set(opt).from(clone).save();
+    const pdf = await buildJsPdfFromElement(element, filename);
+    pdf.save(filename);
   } catch (err) {
-    console.warn('Falha no html2pdf direto, abrindo diálogo nativo de PDF:', err);
+    console.warn('Falha no download via jsPDF, utilizando fallback nativo:', err);
     window.print();
-  } finally {
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
-    }
   }
 }

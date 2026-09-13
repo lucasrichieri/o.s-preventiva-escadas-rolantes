@@ -100,25 +100,11 @@ export default function PdfExportModal({
     try {
       const { generatePdfBase64 } = await import('../utils/pdfGenerator');
       pdfBase64 = await generatePdfBase64(printRef.current, pdfFilename);
-
-      if (!pdfBase64) {
-        console.warn('⚠️ Primeira tentativa retornou nulo, tentando método direto no elemento...');
-        const html2pdfModule = await import('html2pdf.js');
-        const html2pdf = html2pdfModule.default || html2pdfModule;
-        const opt = {
-          margin: [8, 6, 8, 6],
-          filename: pdfFilename,
-          image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 1.75, useCORS: true, logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-        pdfBase64 = await html2pdf().set(opt).from(printRef.current).output('datauristring');
-      }
     } catch (pdfErr) {
       console.error('Erro ao gerar PDF para e-mail:', pdfErr);
     }
 
-    if (!pdfBase64) {
+    if (!pdfBase64 || typeof pdfBase64 !== 'string' || pdfBase64.length < 500) {
       setEmailStatus('error');
       setEmailFeedback('Erro ao renderizar o PDF do relatório. O e-mail não foi disparado para evitar envio sem o arquivo anexo. Tente novamente.');
       return;
