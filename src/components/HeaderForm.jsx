@@ -1,8 +1,14 @@
 import React from 'react';
 import { MONTHS, ACTIVITIES } from '../data/tits502pData';
-import { Building2, MapPin, Wrench, Calendar, UserCheck, Sparkles, FileText } from 'lucide-react';
+import { Building2, MapPin, Wrench, Calendar, UserCheck, Sparkles, FileText, ClipboardList } from 'lucide-react';
 
-export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
+export default function HeaderForm({
+  headerData,
+  setHeaderData,
+  onFillDemo,
+  reportType = 'TITS-502P',
+  onReportTypeChange
+}) {
   const handleChange = (field, value) => {
     setHeaderData(prev => ({ ...prev, [field]: value }));
   };
@@ -15,25 +21,51 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
   const periodicCount = ACTIVITIES.filter(a => !a.isMonthly && a.months && a.months.includes(selectedMonth)).length;
   const totalCount = monthlyCount + periodicCount;
 
+  const handleMonthOrReportChange = (val) => {
+    if (val === 'RIA') {
+      onReportTypeChange?.('RIA');
+    } else {
+      const mNum = parseInt(val, 10);
+      handleChange('mesRef', mNum);
+      if (reportType === 'RIA') {
+        onReportTypeChange?.('TITS-502P');
+      }
+    }
+  };
+
   return (
     <div className="glass-card p-6 mb-8 rounded-2xl bg-white/95 border border-slate-200 shadow-xl backdrop-blur-md relative overflow-hidden">
       {/* Decorative top accent line with TKE logo colors */}
       <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-700 via-rose-600 to-orange-500" />
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold tracking-wider uppercase">
-            <span className="tke-gradient-text font-black flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-purple-700" />
-              PADRÃO OFICIAL TKE — DOCUMENTO TITS-502P
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1 tracking-tight">
-            Relatório Fotográfico de Manutenção Preventiva Unificada
-          </h2>
-          <p className="text-slate-500 text-xs sm:text-sm mt-0.5 font-medium">
-            Escadas e Esteiras Rolantes - TK Elevator
-          </p>
+      {/* Report Type Selector Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-200">
+        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
+          <button
+            type="button"
+            onClick={() => onReportTypeChange?.('TITS-502P')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              reportType === 'TITS-502P'
+                ? 'bg-purple-900 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            TITS-502P (Preventiva Mensal)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onReportTypeChange?.('RIA')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              reportType === 'RIA'
+                ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <ClipboardList className="w-3.5 h-3.5" />
+            RIA - Relatório de Inspeção Anual
+          </button>
         </div>
 
         <button
@@ -46,6 +78,21 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
         </button>
       </div>
 
+      <div className="mb-6">
+        <div className="flex items-center gap-2 text-xs font-bold tracking-wider uppercase">
+          <span className="tke-gradient-text font-black flex items-center gap-1.5">
+            <FileText className="w-4 h-4 text-purple-700" />
+            PADRÃO OFICIAL TKE — DOCUMENTO TITS-502P
+          </span>
+        </div>
+        <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1 tracking-tight">
+          Relatório Fotográfico de Manutenção Preventiva Unificada
+        </h2>
+        <p className="text-slate-500 text-xs sm:text-sm mt-0.5 font-medium">
+          Escadas e Esteiras Rolantes - TK Elevator
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {/* Cliente / Condomínio */}
         <div>
@@ -56,7 +103,7 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
           <input
             type="text"
             placeholder="Ex: Condomínio Edifício Plaza Center"
-            value={headerData.cliente}
+            value={headerData.cliente || ''}
             onChange={(e) => handleChange('cliente', e.target.value)}
             className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all font-medium"
           />
@@ -71,7 +118,7 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
           <input
             type="text"
             placeholder="Ex: Av. Paulista, 1000 - Bloco A"
-            value={headerData.endereco}
+            value={headerData.endereco || ''}
             onChange={(e) => handleChange('endereco', e.target.value)}
             className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all font-medium"
           />
@@ -86,7 +133,7 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
           <input
             type="text"
             placeholder="Ex: ESC-01 (S/N: TK-884920)"
-            value={headerData.equipamento}
+            value={headerData.equipamento || ''}
             onChange={(e) => handleChange('equipamento', e.target.value)}
             className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all font-mono font-bold"
           />
@@ -100,7 +147,7 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
           </label>
           <input
             type="date"
-            value={headerData.data}
+            value={headerData.data || ''}
             onChange={(e) => handleChange('data', e.target.value)}
             className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all font-medium"
           />
@@ -115,7 +162,7 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
           <input
             type="text"
             placeholder="Ex: Carlos Silva & Roberto Alves"
-            value={headerData.tecnicos}
+            value={headerData.tecnicos || ''}
             onChange={(e) => handleChange('tecnicos', e.target.value)}
             className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all font-medium"
           />
@@ -124,19 +171,22 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
         {/* Mês de Referência (Cruza com a matriz) */}
         <div>
           <label className="block text-xs font-extrabold text-orange-600 mb-1.5 flex items-center justify-between">
-            <span>Mês de Referência (Matriz TKE)</span>
-            <span className="text-[10px] bg-orange-100 text-orange-900 font-extrabold px-1.5 py-0.5 rounded">Unifica Cronograma</span>
+            <span>Mês de Referência / Tipo</span>
+            <span className="text-[10px] bg-orange-100 text-orange-900 font-extrabold px-1.5 py-0.5 rounded">Cronograma</span>
           </label>
           <select
-            value={headerData.mesRef}
-            onChange={(e) => handleChange('mesRef', parseInt(e.target.value))}
+            value={reportType === 'RIA' ? 'RIA' : headerData.mesRef}
+            onChange={(e) => handleMonthOrReportChange(e.target.value)}
             className="w-full bg-purple-50 border border-orange-500/80 rounded-xl px-3.5 py-2.5 text-sm text-purple-950 font-black focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer"
           >
             {MONTHS.map(m => (
               <option key={m.id} value={m.id} className="bg-white text-slate-900 font-bold">
-                {m.id.toString().padStart(2, '0')} - {m.name}
+                {m.id.toString().padStart(2, '0')} - {m.name} (TITS-502P)
               </option>
             ))}
+            <option value="RIA" className="bg-orange-50 text-orange-950 font-black">
+              📋 RIA - Relatório de Inspeção Anual
+            </option>
           </select>
         </div>
 
@@ -174,3 +224,4 @@ export default function HeaderForm({ headerData, setHeaderData, onFillDemo }) {
     </div>
   );
 }
+

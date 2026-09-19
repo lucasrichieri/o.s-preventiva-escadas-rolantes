@@ -1,16 +1,20 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { MONTHS, STAGES } from '../data/tits502pData';
+import { RIA_SECTIONS } from '../data/riaData';
 import { Download, X, FileCheck, Loader2, Mail, Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import { sendReportEmail } from '../utils/emailService';
 
 export default function PdfExportModal({
   isOpen,
   onClose,
+  reportType = 'TITS-502P',
   headerData,
-  activeActivities,
-  itemStates,
-  alertConfirmed,
-  signatures
+  activeActivities = [],
+  itemStates = {},
+  alertConfirmed = false,
+  signatures = {},
+  riaHeaderData = {},
+  riaItemStates = {}
 }) {
   const printRef = useRef(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
@@ -18,6 +22,8 @@ export default function PdfExportModal({
   const [toEmail, setToEmail] = useState(() => localStorage.getItem('tke_last_email') || '');
   const [emailStatus, setEmailStatus] = useState('idle'); // 'idle' | 'sending' | 'success' | 'error'
   const [emailFeedback, setEmailFeedback] = useState('');
+
+  const isRia = reportType === 'RIA';
 
   // Fechar o modal ao pressionar a tecla ESC
   useEffect(() => {
@@ -36,15 +42,15 @@ export default function PdfExportModal({
 
   if (!isOpen) return null;
 
-  const mesObj = MONTHS.find(m => m.id === headerData.mesRef) || MONTHS[0];
+  const mesObj = MONTHS.find(m => m.id === headerData?.mesRef) || MONTHS[0];
 
-  // Group activities by stage
+  // Group activities by stage (for TITS-502P)
   const activitiesByStage = STAGES.map(stage => {
     const stageActs = activeActivities.filter(a => a.stageId === stage.id);
     return { stage, activities: stageActs };
   });
 
-  // Calculate overall stats
+  // Calculate overall stats for TITS-502P
   let totalConforme = 0;
   let totalNaoConforme = 0;
   let totalNaoAplica = 0;
@@ -56,14 +62,41 @@ export default function PdfExportModal({
     else if (status === 'Não se aplica') totalNaoAplica++;
   });
 
+  // Coletar todas as fotos anexadas no RIA
+  const riaAttachedPhotos = [];
+  if (isRia) {
+    RIA_SECTIONS.forEach(sec => {
+      sec.items.forEach(item => {
+        const state = riaItemStates[item.id];
+        if (state?.photos && state.photos.length > 0) {
+          state.photos.forEach((photoUrl, pIdx) => {
+            riaAttachedPhotos.push({
+              itemTitle: item.name,
+              url: photoUrl,
+              pIdx
+            });
+          });
+        }
+      });
+    });
+  }
+
   // Download direto do arquivo PDF (.pdf)
   const handleDirectDownload = async () => {
     if (!printRef.current) return;
     setIsDownloadingPdf(true);
     try {
       const { downloadReportPdf } = await import('../utils/pdfGenerator');
-      const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
-      await downloadReportPdf(printRef.current, `Relatorio_TKE_${clienteSafe}.pdf`);
+      let pdfFileName = 'Relatorio_TKE.pdf';
+      if (isRia) {
+        const edificioSafe = (riaHeaderData.edificio || 'Edificio').replace(/[^a-zA-Z0-9]/g, '_');
+        const codSafe = (riaHeaderData.codigo || 'RIA').replace(/[^a-zA-Z0-9]/g, '_');
+        pdfFileName = `RIA_TKE_${edificioSafe}_${codSafe}.pdf`;
+      } else {
+        const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
+        pdfFileName = `Relatorio_TKE_${clienteSafe}.pdf`;
+      }
+      await downloadReportPdf(printRef.current, pdfFileName);
     } catch (err) {
       console.error('Erro no download do PDF:', err);
       window.print();
@@ -92,50 +125,52 @@ export default function PdfExportModal({
 
     // Gerar o PDF com validação e múltiplos fallbacks
     let pdfBase64 = null;
-    const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
-    const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-    const nomeMes = MESES[(headerData.mesRef || 1) - 1] || 'Janeiro';
-    const pdfFilename = `Relatorio_TKE_${clienteSafe}_${nomeMes}.pdf`;
+    let pdfFilename = 'Relatorio_TKE.pdf';
+
+    if (isRia) {
+      const edificioSafe = (riaHeaderData.edificio || 'Edificio').replace(/[^a-zA-Z0-9]/g, '_');
+      const codSafe = (riaHeaderData.codigo || 'RIA').replace(/[^a-zA-Z0-9]/g, '_');
+      pdfFilename = `RIA_TKE_${edificioSafe}_${codSafe}.pdf`;
+    } else {
+      const clienteSafe = (headerData.cliente || 'Equipamento').replace(/[^a-zA-Z0-9]/g, '_');
+      const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+      const nomeMes = MESES[(headerData.mesRef || 1) - 1] || 'Janeiro';
+      pdfFilename = `Relatorio_TKE_${clienteSafe}_${nomeMes}.pdf`;
+    }
 
     try {
-      console.log('[TKE-PDF] Iniciando geração do PDF...', { element: printRef.current, filename: pdfFilename });
       const { generatePdfBase64 } = await import('../utils/pdfGenerator');
       pdfBase64 = await generatePdfBase64(printRef.current, pdfFilename);
-      console.log('[TKE-PDF] Resultado da geração:', { type: typeof pdfBase64, length: pdfBase64?.length || 0 });
     } catch (pdfErr) {
       console.error('[TKE-PDF] Exceção ao gerar PDF para e-mail:', pdfErr);
-      console.error('[TKE-PDF] Stack:', pdfErr?.stack);
     }
 
     if (!pdfBase64 || typeof pdfBase64 !== 'string' || pdfBase64.length < 500) {
-      console.warn('[TKE-PDF] PDF Base64 inválido. Tentando fallback com html2pdf.js...');
-      // Fallback: tentar gerar com html2pdf.js
+      console.warn('[TKE-PDF] Fallback html2pdf.js...');
       try {
         const html2pdf = (await import('html2pdf.js')).default;
         const opt = {
-          margin: [6, 6, 6, 6],
+          margin: [4, 4, 4, 4],
           filename: pdfFilename,
           image: { type: 'jpeg', quality: 0.95 },
           html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         const pdfBlob = await html2pdf().set(opt).from(printRef.current).outputPdf('blob');
-        // Converter Blob para Base64 Data URI
         pdfBase64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result);
           reader.onerror = reject;
           reader.readAsDataURL(pdfBlob);
         });
-        console.log('[TKE-PDF] Fallback html2pdf.js gerou PDF com sucesso:', pdfBase64?.length);
       } catch (fallbackErr) {
-        console.error('[TKE-PDF] Fallback html2pdf.js também falhou:', fallbackErr);
+        console.error('[TKE-PDF] Fallback também falhou:', fallbackErr);
       }
     }
 
     if (!pdfBase64 || typeof pdfBase64 !== 'string' || pdfBase64.length < 500) {
       setEmailStatus('error');
-      setEmailFeedback('Erro ao renderizar o PDF do relatório. O e-mail não foi disparado para evitar envio sem o arquivo anexo. Tente novamente.');
+      setEmailFeedback('Erro ao renderizar o PDF do relatório. Tente novamente.');
       return;
     }
 
@@ -143,16 +178,33 @@ export default function PdfExportModal({
 
     try {
       localStorage.setItem('tke_last_email', toEmail);
-      const res = await sendReportEmail({
-        toEmail,
-        headerData,
-        activeActivities,
-        itemStates,
-        pdfBase64,       // Passa o Base64 já gerado
-        pdfFilename,     // Nome do arquivo
-        pdfElement: null // Não precisa gerar novamente
-      });
+      const emailPayload = isRia
+        ? {
+            toEmail,
+            headerData: {
+              cliente: riaHeaderData.edificio || 'Shopping Bella Citta',
+              endereco: riaHeaderData.endereco,
+              equipamento: riaHeaderData.equipamento,
+              data: riaHeaderData.data,
+              tecnicos: 'Técnico TKE'
+            },
+            activeActivities: [],
+            itemStates: {},
+            pdfBase64,
+            pdfFilename,
+            customSubject: `[TKE] Relatório de Inspeção Anual (RIA) - ${riaHeaderData.edificio || 'Equipamento'} (Cód: ${riaHeaderData.codigo || '-'})`
+          }
+        : {
+            toEmail,
+            headerData,
+            activeActivities,
+            itemStates,
+            pdfBase64,
+            pdfFilename,
+            pdfElement: null
+          };
 
+      const res = await sendReportEmail(emailPayload);
       setEmailStatus('success');
       setEmailFeedback(res.message || `Relatório e PDF enviados com sucesso para ${toEmail}!`);
     } catch (err) {
@@ -179,7 +231,7 @@ export default function PdfExportModal({
           <div className="flex items-center gap-2">
             <FileCheck className="w-5 h-5 text-orange-400" />
             <h3 className="text-sm sm:text-base font-extrabold text-white">
-              Relatório Oficial TKE (TITS-502P)
+              {isRia ? 'Relatório de Inspeção Anual - RIA (TKE)' : 'Relatório Oficial TKE (TITS-502P)'}
             </h3>
           </div>
 
@@ -256,7 +308,7 @@ export default function PdfExportModal({
                     type="email"
                     value={toEmail}
                     onChange={(e) => setToEmail(e.target.value)}
-                    placeholder="ex: cliente@condominio.com ou gestor@tke.com"
+                    placeholder="ex: gestor@shoppingbellacitta.com ou gestor@tke.com"
                     required
                     className="w-full bg-transparent text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none"
                   />
@@ -313,253 +365,543 @@ export default function PdfExportModal({
         {/* Printable / Preview Content Area */}
         <div className="modal-content-area p-4 sm:p-6 overflow-y-auto bg-slate-950 flex-1">
           
-          <div
-            ref={printRef}
-            id="pdf-document"
-            className="bg-white text-slate-900 p-6 sm:p-8 rounded-lg shadow-lg font-sans max-w-[210mm] mx-auto text-xs relative overflow-hidden"
-            style={{ backgroundColor: '#ffffff' }}
-          >
-            {/* Top TKE Brand Gradient Strip */}
+          {/* ========================================================
+              RENDERIZAÇÃO RIA (RELATÓRIO DE INSPEÇÃO ANUAL)
+              ======================================================== */}
+          {isRia ? (
             <div
-              className="absolute top-0 left-0 right-0 h-2"
-              style={{ background: 'linear-gradient(to right, #7e22ce, #e11d48, #f97316)', height: '8px' }}
-            />
+              ref={printRef}
+              id="pdf-document"
+              className="bg-white text-slate-900 p-6 sm:p-8 rounded-lg shadow-lg font-sans max-w-[210mm] mx-auto text-xs relative overflow-hidden"
+              style={{ backgroundColor: '#ffffff', color: '#000000', fontFamily: 'Arial, sans-serif' }}
+            >
+              {/* Header Box with Title and TKE Logo */}
+              <div className="flex justify-between items-center border border-slate-400 p-3 mb-3" style={{ borderColor: '#64748b' }}>
+                <div className="text-center flex-1 pr-4">
+                  <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 uppercase">
+                    RELATÓRIO DE INSPEÇÃO ANUAL - ESCADAS E ESTEIRAS
+                  </h1>
+                </div>
 
-            {/* Header Document Banner with TKE Brand Logo */}
-            <div className="border-b-2 border-slate-900 pb-4 mb-4 flex justify-between items-start pt-2">
-              <div>
-                {/* Official styled TKE logo mark */}
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="font-black text-2xl tracking-tighter text-purple-900 font-mono">
-                    TK<span className="text-orange-500">E</span>
-                  </span>
-                  <span className="text-[10px] font-extrabold text-purple-900 tracking-wider uppercase border-l-2 border-slate-300 pl-2">
-                    TK Elevator Corporation
+                {/* TKE Official Logo Box */}
+                <div className="shrink-0 border-l border-slate-300 pl-4 flex items-center">
+                  <span className="font-mono font-black text-2xl tracking-tighter text-slate-950">
+                    TK<span className="text-slate-800">E</span>
                   </span>
                 </div>
-                <h1 className="text-lg font-extrabold text-slate-900">
-                  RELATÓRIO FOTOGRÁFICO DE MANUTENÇÃO PREVENTIVA
-                </h1>
-                <p className="text-[11px] text-slate-600 font-semibold">
-                  Metodologia e Atividades TKE - Código TITS-502P (Ind. 1)
+              </div>
+
+              {/* Information Grid Table (matching PDF Page 1) */}
+              <table className="w-full border-collapse border border-slate-400 text-[10px] mb-3" style={{ borderColor: '#64748b' }}>
+                <tbody>
+                  {/* Linha 1 */}
+                  <tr>
+                    <td className="border border-slate-400 p-1.5 font-bold text-slate-700 w-1/2" style={{ borderColor: '#64748b' }}>
+                      <span className="block text-[8px] text-slate-500 font-normal">Edifício</span>
+                      <span className="font-bold text-slate-900">{riaHeaderData.edificio || '-'}</span>
+                    </td>
+                    <td className="border border-slate-400 p-1.5 font-bold text-slate-700 w-1/2" style={{ borderColor: '#64748b' }}>
+                      <span className="block text-[8px] text-slate-500 font-normal">Endereço</span>
+                      <span className="font-semibold text-slate-900">{riaHeaderData.endereco || '-'}</span>
+                    </td>
+                  </tr>
+
+                  {/* Linha 2 */}
+                  <tr>
+                    <td className="border border-slate-400 p-1.5 text-slate-700" style={{ borderColor: '#64748b' }}>
+                      <div className="flex justify-between">
+                        <div>
+                          <span className="block text-[8px] text-slate-500">Equipamento</span>
+                          <span className="font-bold text-slate-900 font-mono">{riaHeaderData.equipamento || '-'}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[8px] text-slate-500">Paradas/Entradas</span>
+                          <span className="font-semibold text-slate-900">{riaHeaderData.paradasEntradas || '0'}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="border border-slate-400 p-1.5 text-slate-700" style={{ borderColor: '#64748b' }}>
+                      <span className="block text-[8px] text-slate-500">Fabricante</span>
+                      <span className="font-bold text-slate-900">{riaHeaderData.fabricante || '-'}</span>
+                    </td>
+                  </tr>
+
+                  {/* Linha 3 */}
+                  <tr>
+                    <td className="border border-slate-400 p-1.5 text-slate-700" style={{ borderColor: '#64748b' }}>
+                      <div className="flex justify-between">
+                        <div>
+                          <span className="block text-[8px] text-slate-500">Máquina</span>
+                          <span className="font-semibold text-slate-900">{riaHeaderData.maquina || 'Máquina não cadastrada.'}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[8px] text-slate-500">Quadro de comando</span>
+                          <span className="font-semibold text-slate-900">{riaHeaderData.quadroComando || '-'}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="border border-slate-400 p-1.5 text-slate-700" style={{ borderColor: '#64748b' }}>
+                      <span className="block text-[8px] text-slate-500">Portas pavimento</span>
+                      <span className="font-semibold text-slate-900">{riaHeaderData.portasPavimento || 'Indefinida'}</span>
+                    </td>
+                  </tr>
+
+                  {/* Linha 4 */}
+                  <tr>
+                    <td className="border border-slate-400 p-1.5 text-slate-700" style={{ borderColor: '#64748b' }}>
+                      <div className="flex justify-between">
+                        <div>
+                          <span className="block text-[8px] text-slate-500">Capacidade</span>
+                          <span className="font-semibold text-slate-900">{riaHeaderData.capacidade || '0'}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[8px] text-slate-500 uppercase font-bold">DATA INSPEÇÃO</span>
+                          <span className="font-bold text-slate-900 font-mono">
+                            {riaHeaderData.data ? new Date(riaHeaderData.data).toLocaleDateString('pt-BR') : '-'}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="border border-slate-400 p-1.5 text-slate-700" style={{ borderColor: '#64748b' }}>
+                      <span className="block text-[8px] text-slate-500">Código</span>
+                      <span className="font-bold text-slate-900 font-mono">{riaHeaderData.codigo || '-'}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Introdução Header */}
+              <div className="mb-2">
+                <h2 className="text-xs font-bold text-slate-900">Introdução</h2>
+              </div>
+
+              {/* Main Items Inspection Table */}
+              <table className="w-full border-collapse border border-slate-400 text-[9px] mb-4" style={{ borderColor: '#64748b' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#0284c7', color: '#ffffff' }}>
+                    <th className="border border-slate-400 p-1.5 text-left font-bold w-[34%]" style={{ borderColor: '#64748b' }}>Item</th>
+                    <th className="border border-slate-400 p-1.5 text-center font-bold w-[10%]" style={{ borderColor: '#64748b' }}>Resultado</th>
+                    <th className="border border-slate-400 p-1.5 text-left font-bold w-[23%]" style={{ borderColor: '#64748b' }}>Descrição</th>
+                    <th className="border border-slate-400 p-1.5 text-center font-bold w-[9%]" style={{ borderColor: '#64748b' }}>Corr.</th>
+                    <th className="border border-slate-400 p-1.5 text-left font-bold w-[24%]" style={{ borderColor: '#64748b' }}>Análise / Providências</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {RIA_SECTIONS.map((sec) => (
+                    <React.Fragment key={sec.id}>
+                      {/* Section Blue Header Row */}
+                      <tr style={{ backgroundColor: '#0284c7', color: '#ffffff' }}>
+                        <td colSpan={5} className="border border-slate-400 p-1 font-bold uppercase tracking-wider text-[9px]" style={{ borderColor: '#64748b' }}>
+                          {sec.title}
+                        </td>
+                      </tr>
+
+                      {/* Items */}
+                      {sec.items.map((item) => {
+                        const itemState = riaItemStates[item.id] || {
+                          result: item.defaultResult || 'C',
+                          corr: item.defaultCorr || '--',
+                          descricao: '',
+                          providencias: ''
+                        };
+
+                        if (item.isParent) {
+                          const subStates = itemState.subItemsState || {};
+                          return (
+                            <React.Fragment key={item.id}>
+                              {/* Parent Title Row */}
+                              <tr className="bg-slate-50">
+                                <td colSpan={5} className="border border-slate-300 p-1 font-bold text-slate-900" style={{ borderColor: '#cbd5e1' }}>
+                                  {item.name}
+                                </td>
+                              </tr>
+                              {/* Sub items */}
+                              {item.subItems.map((sub) => {
+                                const subState = subStates[sub.id] || { checked: false, corr: sub.corr, providencias: '' };
+                                const isChecked = subState.checked;
+                                const subCorr = isChecked ? (subState.corr || sub.corr) : '';
+
+                                return (
+                                  <tr key={sub.id} className={isChecked ? 'bg-amber-50' : 'bg-white'}>
+                                    <td className="border border-slate-300 p-1 pl-3 text-slate-800" style={{ borderColor: '#cbd5e1' }}>
+                                      {sub.name}
+                                    </td>
+                                    <td className="border border-slate-300 p-1 text-center font-bold text-slate-900" style={{ borderColor: '#cbd5e1' }}>
+                                      {isChecked ? '✓' : ''}
+                                    </td>
+                                    <td className="border border-slate-300 p-1 text-slate-700" style={{ borderColor: '#cbd5e1' }}>
+                                      {isChecked && itemState.descricao ? itemState.descricao : ''}
+                                    </td>
+                                    <td className="border border-slate-300 p-1 text-center font-bold text-slate-900" style={{ borderColor: '#cbd5e1' }}>
+                                      {subCorr}
+                                    </td>
+                                    <td className="border border-slate-300 p-1 text-slate-700" style={{ borderColor: '#cbd5e1' }}>
+                                      {isChecked && (subState.providencias || itemState.providencias) ? (subState.providencias || itemState.providencias) : ''}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </React.Fragment>
+                          );
+                        }
+
+                        // Regular item
+                        const res = itemState.result || item.defaultResult || 'C';
+                        const corr = itemState.corr || item.defaultCorr || '--';
+
+                        return (
+                          <tr key={item.id} className="bg-white hover:bg-slate-50">
+                            <td className="border border-slate-300 p-1 font-semibold text-slate-900" style={{ borderColor: '#cbd5e1' }}>
+                              {item.name}
+                            </td>
+                            <td className="border border-slate-300 p-1 text-center font-bold text-slate-900" style={{ borderColor: '#cbd5e1' }}>
+                              {res}
+                            </td>
+                            <td className="border border-slate-300 p-1 text-slate-700" style={{ borderColor: '#cbd5e1' }}>
+                              {itemState.descricao || ''}
+                            </td>
+                            <td className="border border-slate-300 p-1 text-center font-medium text-slate-900" style={{ borderColor: '#cbd5e1' }}>
+                              {corr}
+                            </td>
+                            <td className="border border-slate-300 p-1 text-slate-700" style={{ borderColor: '#cbd5e1' }}>
+                              {itemState.providencias || ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Legendas Box (matching PDF page 2) */}
+              <table className="w-full border-collapse border border-slate-400 text-[8px] mb-4 break-inside-avoid" style={{ borderColor: '#64748b' }}>
+                <tbody>
+                  <tr>
+                    <td className="border border-slate-400 p-1.5 font-bold bg-slate-100 text-slate-800 w-[15%]" style={{ borderColor: '#64748b' }}>
+                      Legendas
+                    </td>
+                    <td className="border border-slate-400 p-1.5 text-slate-700 leading-relaxed w-[85%]" style={{ borderColor: '#64748b' }}>
+                      <div>
+                        <strong>Resultado:</strong> C - Conforme | NC - Não Conforme | ATR - Atualização Técnica Recomendada | N/A - Não Aplicável
+                      </div>
+                      <div className="mt-0.5">
+                        <strong>Correção:</strong> ORÇ - Orçamento | ITP - Informativo para Troca de Peças | CC - Comunicação ao Cliente | DIR - Item a ser ajustado/regulado/lubrificado
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* ANEXO FOTOGRÁFICO Section */}
+              <div className="mb-4 break-inside-avoid">
+                <div className="border-b border-slate-400 pb-1 mb-2">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase text-center">ANEXO FOTOGRÁFICO</h3>
+                </div>
+
+                {riaAttachedPhotos.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2 bg-slate-50 border border-slate-300 rounded">
+                    {riaAttachedPhotos.map((photo, pIdx) => (
+                      <div key={pIdx} className="border border-slate-300 rounded overflow-hidden bg-white">
+                        <img src={photo.url} alt="Foto Anexa" className="w-full h-28 object-cover" />
+                        <div className="p-1 text-[8px] font-mono text-slate-800 bg-slate-100 border-t border-slate-200 truncate">
+                          {photo.itemTitle} ({pIdx + 1})
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-600 italic py-1">Sem anexos.</p>
+                )}
+              </div>
+
+              {/* Conclusão Section */}
+              <div className="mb-6 break-inside-avoid">
+                <div className="border-b border-slate-400 pb-1 mb-2">
+                  <h3 className="text-xs font-bold text-slate-900">Conclusão</h3>
+                </div>
+                <p className="text-[10px] text-slate-800 leading-relaxed">
+                  {riaHeaderData.conclusao || 'Equipamento inspecionado conforme procedimentos e normas de segurança técnica TKE.'}
                 </p>
               </div>
 
-              <div className="text-right border-l-2 border-orange-500 pl-4">
-                <span className="text-[11px] font-black bg-purple-950 text-purple-100 px-2.5 py-1 rounded shadow-sm" style={{ backgroundColor: '#0c0a20', color: '#e9d5ff' }}>
-                  TITS-502P (TKE)
-                </span>
-                <p className="text-[10px] text-slate-600 font-medium mt-1.5">Data: {headerData.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : '-'}</p>
-                <p className="text-[10px] text-slate-600 font-medium">Mês Ref: <strong className="text-purple-900">{mesObj.name}</strong></p>
+              {/* Location, Closure and Signatures (matching PDF Page 2) */}
+              <div className="pt-4 border-t border-slate-300 break-inside-avoid text-[10px]">
+                <div className="text-right font-medium text-slate-800 mb-6">
+                  {riaHeaderData.cidade || 'PASSO FUNDO, 19/09/2026'}
+                </div>
+
+                <div className="mb-8">
+                  <p className="text-slate-700">Cordialmente,</p>
+                  <div className="w-48 border-b border-slate-900 my-4" />
+                  <p className="font-bold text-slate-900 uppercase">{riaHeaderData.empresa || 'TK ELEVADORES BRASIL LTDA'}</p>
+                </div>
+
+                <div>
+                  <p className="font-bold text-slate-900">Ciente:</p>
+                  <p className="text-slate-700 italic">Recebi o relatório 'RELATÓRIO DE INSPEÇÃO ANUAL - ESCADAS E ESTEIRAS'</p>
+                  
+                  <div className="mt-8 pt-1 border-t border-slate-900 w-64 text-center">
+                    <p className="text-slate-800 text-[9px] font-bold">
+                      {riaHeaderData.clienteNome || 'Cliente/nome'}
+                    </p>
+                  </div>
+                </div>
               </div>
+
             </div>
+          ) : (
+            /* ========================================================
+               RENDERIZAÇÃO TITS-502P (MANUTENÇÃO PREVENTIVA MENSAL)
+               ======================================================== */
+            <div
+              ref={printRef}
+              id="pdf-document"
+              className="bg-white text-slate-900 p-6 sm:p-8 rounded-lg shadow-lg font-sans max-w-[210mm] mx-auto text-xs relative overflow-hidden"
+              style={{ backgroundColor: '#ffffff' }}
+            >
+              {/* Top TKE Brand Gradient Strip */}
+              <div
+                className="absolute top-0 left-0 right-0 h-2"
+                style={{ background: 'linear-gradient(to right, #7e22ce, #e11d48, #f97316)', height: '8px' }}
+              />
 
-            {/* Client and Facility Info Grid */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-slate-50 p-3.5 rounded-lg border border-purple-200 mb-4" style={{ backgroundColor: '#f8fafc', borderColor: '#e9d5ff' }}>
-              <div>
-                <span className="text-[10px] text-purple-900 font-bold uppercase block">Cliente / Condomínio</span>
-                <span className="text-xs font-bold text-slate-900">{headerData.cliente || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-purple-900 font-bold uppercase block">Local / Endereço</span>
-                <span className="text-xs font-semibold text-slate-800">{headerData.endereco || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-purple-900 font-bold uppercase block">Equipamento (Tag / Série)</span>
-                <span className="text-xs font-mono font-bold text-slate-900">{headerData.equipamento || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-purple-900 font-bold uppercase block">Técnico(s) Responsável(is)</span>
-                <span className="text-xs font-semibold text-slate-800">{headerData.tecnicos || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-purple-900 font-bold uppercase block">Escopo da Manutenção</span>
-                <span className="text-xs font-bold text-slate-800">Preventiva Periódica Unificada ({mesObj.name})</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-purple-900 font-bold uppercase block">Status de Segurança</span>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded inline-block ${alertConfirmed ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}
-                  style={alertConfirmed ? { backgroundColor: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' } : { backgroundColor: '#fef3c7', color: '#92400e', borderColor: '#fbbf24' }}
-                >
-                  {alertConfirmed ? 'Aviso de Segurança Validado' : 'Aviso Pendente'}
-                </span>
-              </div>
-            </div>
+              {/* Header Document Banner with TKE Brand Logo */}
+              <div className="border-b-2 border-slate-900 pb-4 mb-4 flex justify-between items-start pt-2">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="font-black text-2xl tracking-tighter text-purple-900 font-mono">
+                      TK<span className="text-orange-500">E</span>
+                    </span>
+                    <span className="text-[10px] font-extrabold text-purple-900 tracking-wider uppercase border-l-2 border-slate-300 pl-2">
+                      TK Elevator Corporation
+                    </span>
+                  </div>
+                  <h1 className="text-lg font-extrabold text-slate-900">
+                    RELATÓRIO FOTOGRÁFICO DE MANUTENÇÃO PREVENTIVA
+                  </h1>
+                  <p className="text-[11px] text-slate-600 font-semibold">
+                    Metodologia e Atividades TKE - Código TITS-502P (Ind. 1)
+                  </p>
+                </div>
 
-            {/* Safety Warning Banner */}
-            <div className="p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-md mb-4 text-[10px] text-amber-900" style={{ backgroundColor: '#fffbeb', borderLeftColor: '#f59e0b' }}>
-              <strong className="block text-[10px] uppercase font-extrabold text-amber-950 mb-0.5">
-                ⚠️ ALERTA OBRIGATÓRIO DE SEGURANÇA (TITS-502P):
-              </strong>
-              Desligar a escada/esteira rolante e notificar o condomínio e supervisor se ocorrer: (1) deficiência na alimentação elétrica (falta de aterramento ou ligações clandestinas); (2) micro da série de segurança danificado/ponteado; (3) água no poço.
-            </div>
-
-            {/* Executive Summary Bar */}
-            <div className="grid grid-cols-3 gap-3 mb-5 text-center">
-              <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-md" style={{ backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }}>
-                <span className="text-[10px] text-emerald-800 uppercase font-bold block" style={{ color: '#065f46' }}>Conformes</span>
-                <span className="text-base font-extrabold text-emerald-700" style={{ color: '#047857' }}>{totalConforme}</span>
+                <div className="text-right border-l-2 border-orange-500 pl-4">
+                  <span className="text-[11px] font-black bg-purple-950 text-purple-100 px-2.5 py-1 rounded shadow-sm" style={{ backgroundColor: '#0c0a20', color: '#e9d5ff' }}>
+                    TITS-502P (TKE)
+                  </span>
+                  <p className="text-[10px] text-slate-600 font-medium mt-1.5">Data: {headerData?.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : '-'}</p>
+                  <p className="text-[10px] text-slate-600 font-medium">Mês Ref: <strong className="text-purple-900">{mesObj.name}</strong></p>
+                </div>
               </div>
-              <div className={`p-2 rounded-md border ${totalNaoConforme > 0 ? 'bg-red-100 border-red-300 text-red-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                <span className="text-[10px] uppercase font-bold block">Não Conformes</span>
-                <span className="text-base font-extrabold text-red-600" style={{ color: '#dc2626' }}>{totalNaoConforme}</span>
+
+              {/* Client and Facility Info Grid */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-slate-50 p-3.5 rounded-lg border border-purple-200 mb-4" style={{ backgroundColor: '#f8fafc', borderColor: '#e9d5ff' }}>
+                <div>
+                  <span className="text-[10px] text-purple-900 font-bold uppercase block">Cliente / Condomínio</span>
+                  <span className="text-xs font-bold text-slate-900">{headerData?.cliente || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-purple-900 font-bold uppercase block">Local / Endereço</span>
+                  <span className="text-xs font-semibold text-slate-800">{headerData?.endereco || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-purple-900 font-bold uppercase block">Equipamento (Tag / Série)</span>
+                  <span className="text-xs font-mono font-bold text-slate-900">{headerData?.equipamento || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-purple-900 font-bold uppercase block">Técnico(s) Responsável(is)</span>
+                  <span className="text-xs font-semibold text-slate-800">{headerData?.tecnicos || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-purple-900 font-bold uppercase block">Escopo da Manutenção</span>
+                  <span className="text-xs font-bold text-slate-800">Preventiva Periódica Unificada ({mesObj.name})</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-purple-900 font-bold uppercase block">Status de Segurança</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded inline-block ${alertConfirmed ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}
+                    style={alertConfirmed ? { backgroundColor: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' } : { backgroundColor: '#fef3c7', color: '#92400e', borderColor: '#fbbf24' }}
+                  >
+                    {alertConfirmed ? 'Aviso de Segurança Validado' : 'Aviso Pendente'}
+                  </span>
+                </div>
               </div>
-              <div className="bg-slate-50 border border-slate-200 p-2 rounded-md">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block">Não se Aplica</span>
-                <span className="text-base font-extrabold text-slate-700">{totalNaoAplica}</span>
+
+              {/* Safety Warning Banner */}
+              <div className="p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-md mb-4 text-[10px] text-amber-900" style={{ backgroundColor: '#fffbeb', borderLeftColor: '#f59e0b' }}>
+                <strong className="block text-[10px] uppercase font-extrabold text-amber-950 mb-0.5">
+                  ⚠️ ALERTA OBRIGATÓRIO DE SEGURANÇA (TITS-502P):
+                </strong>
+                Desligar a escada/esteira rolante e notificar o condomínio e supervisor se ocorrer: (1) deficiência na alimentação elétrica (falta de aterramento ou ligações clandestinas); (2) micro da série de segurança danificado/ponteado; (3) água no poço.
               </div>
-            </div>
 
-            {/* Stages & Activities Grid */}
-            <div className="space-y-4">
-              {activitiesByStage.map(({ stage, activities }) => {
-                if (activities.length === 0) return null;
+              {/* Executive Summary Bar */}
+              <div className="grid grid-cols-3 gap-3 mb-5 text-center">
+                <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-md" style={{ backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }}>
+                  <span className="text-[10px] text-emerald-800 uppercase font-bold block" style={{ color: '#065f46' }}>Conformes</span>
+                  <span className="text-base font-extrabold text-emerald-700" style={{ color: '#047857' }}>{totalConforme}</span>
+                </div>
+                <div className={`p-2 rounded-md border ${totalNaoConforme > 0 ? 'bg-red-100 border-red-300 text-red-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                  <span className="text-[10px] uppercase font-bold block">Não Conformes</span>
+                  <span className="text-base font-extrabold text-red-600" style={{ color: '#dc2626' }}>{totalNaoConforme}</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 p-2 rounded-md">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">Não se Aplica</span>
+                  <span className="text-base font-extrabold text-slate-700">{totalNaoAplica}</span>
+                </div>
+              </div>
 
-                return (
-                  <div key={stage.id} className="border border-slate-300 rounded-lg overflow-hidden">
-                    {/* Stage Header with TKE gradient */}
-                    <div
-                      className="bg-gradient-to-r from-purple-950 to-slate-900 text-white px-3.5 py-1.5 font-bold text-xs flex justify-between items-center"
-                      style={{ background: 'linear-gradient(to right, #0c0a20, #0f172a)', color: '#ffffff' }}
-                    >
-                      <span>{stage.title} - {stage.subtitle}</span>
-                      <span className="text-[10px] font-semibold text-orange-300" style={{ color: '#fdba74' }}>{activities.length} itens</span>
-                    </div>
+              {/* Stages & Activities Grid */}
+              <div className="space-y-4">
+                {activitiesByStage.map(({ stage, activities }) => {
+                  if (activities.length === 0) return null;
 
-                    {/* Stage Items */}
-                    <div className="divide-y divide-slate-200 bg-white">
-                      {activities.map(act => {
-                        const itemState = itemStates[act.id] || { status: 'Conforme', comment: '', photos: [] };
-                        const status = itemState.status || 'Conforme';
-                        const photos = itemState.photos || [];
+                  return (
+                    <div key={stage.id} className="border border-slate-300 rounded-lg overflow-hidden">
+                      {/* Stage Header */}
+                      <div
+                        className="bg-gradient-to-r from-purple-950 to-slate-900 text-white px-3.5 py-1.5 font-bold text-xs flex justify-between items-center"
+                        style={{ background: 'linear-gradient(to right, #0c0a20, #0f172a)', color: '#ffffff' }}
+                      >
+                        <span>{stage.title} - {stage.subtitle}</span>
+                        <span className="text-[10px] font-semibold text-orange-300" style={{ color: '#fdba74' }}>{activities.length} itens</span>
+                      </div>
 
-                        return (
-                          <div key={act.id} className="p-3 text-[11px] leading-tight break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="flex items-start gap-2">
-                                <span className="font-mono font-bold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded border border-purple-300 text-[10px] shrink-0" style={{ backgroundColor: '#f3e8ff', color: '#581c87', borderColor: '#d8b4fe' }}>
-                                  {act.code}
-                                </span>
-                                {act.isMonthly ? (
-                                  <span className="text-[8px] bg-blue-50 text-blue-800 px-1 py-0.5 rounded border border-blue-200 font-bold uppercase shrink-0" style={{ backgroundColor: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' }}>
-                                    Mensal
+                      {/* Stage Items */}
+                      <div className="divide-y divide-slate-200 bg-white">
+                        {activities.map(act => {
+                          const itemState = itemStates[act.id] || { status: 'Conforme', comment: '', photos: [] };
+                          const status = itemState.status || 'Conforme';
+                          const photos = itemState.photos || [];
+
+                          return (
+                            <div key={act.id} className="p-3 text-[11px] leading-tight break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex items-start gap-2">
+                                  <span className="font-mono font-bold bg-purple-100 text-purple-900 px-1.5 py-0.5 rounded border border-purple-300 text-[10px] shrink-0" style={{ backgroundColor: '#f3e8ff', color: '#581c87', borderColor: '#d8b4fe' }}>
+                                    {act.code}
                                   </span>
-                                ) : (
-                                  <span className="text-[8px] bg-amber-50 text-amber-900 px-1 py-0.5 rounded border border-amber-300 font-bold uppercase shrink-0" style={{ backgroundColor: '#fffbeb', color: '#78350f', borderColor: '#fcd34d' }}>
-                                    Periódica
-                                  </span>
-                                )}
-                                <div>
-                                  <p className="font-semibold text-slate-900">{act.description}</p>
-                                  {itemState.comment && (
-                                    <p className="text-[10px] text-slate-600 italic mt-0.5">
-                                      Obs: {itemState.comment}
-                                    </p>
+                                  {act.isMonthly ? (
+                                    <span className="text-[8px] bg-blue-50 text-blue-800 px-1 py-0.5 rounded border border-blue-200 font-bold uppercase shrink-0" style={{ backgroundColor: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' }}>
+                                      Mensal
+                                    </span>
+                                  ) : (
+                                    <span className="text-[8px] bg-amber-50 text-amber-900 px-1 py-0.5 rounded border border-amber-300 font-bold uppercase shrink-0" style={{ backgroundColor: '#fffbeb', color: '#78350f', borderColor: '#fcd34d' }}>
+                                      Periódica
+                                    </span>
                                   )}
+                                  <div>
+                                    <p className="font-semibold text-slate-900">{act.description}</p>
+                                    {itemState.comment && (
+                                      <p className="text-[10px] text-slate-600 italic mt-0.5">
+                                        Obs: {itemState.comment}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
+
+                                <span
+                                  className={`px-2 py-0.5 rounded font-bold text-[10px] shrink-0 ${
+                                    status === 'Conforme'
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                      : status === 'Não conforme'
+                                      ? 'bg-red-100 text-red-800 border border-red-400 font-extrabold'
+                                      : 'bg-slate-100 text-slate-600 border border-slate-300'
+                                  }`}
+                                  style={
+                                    status === 'Conforme'
+                                      ? { backgroundColor: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
+                                      : status === 'Não conforme'
+                                      ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#f87171' }
+                                      : { backgroundColor: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' }
+                                  }
+                                >
+                                  {status}
+                                </span>
                               </div>
 
-                              <span
-                                className={`px-2 py-0.5 rounded font-bold text-[10px] shrink-0 ${
-                                  status === 'Conforme'
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                    : status === 'Não conforme'
-                                    ? 'bg-red-100 text-red-800 border border-red-400 font-extrabold'
-                                    : 'bg-slate-100 text-slate-600 border border-slate-300'
-                                }`}
-                                style={
-                                  status === 'Conforme'
-                                    ? { backgroundColor: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
-                                    : status === 'Não conforme'
-                                    ? { backgroundColor: '#fee2e2', color: '#991b1b', borderColor: '#f87171' }
-                                    : { backgroundColor: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' }
-                                }
-                              >
-                                {status}
-                              </span>
-                            </div>
+                              {/* Attached Photos */}
+                              {photos.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 gap-2 break-inside-avoid">
+                                  {photos.map((photoUrl, pIdx) => {
+                                    const condomínioStr = headerData?.cliente ? headerData.cliente.trim() : "Condomínio";
+                                    const dataStr = headerData?.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : "Data";
+                                    const photoNumStr = photos.length > 1 ? ` (Foto ${pIdx + 1})` : '';
+                                    const legendText = `Item ${act.code} - ${condomínioStr} - ${dataStr}${photoNumStr}`;
 
-                            {/* Attached Photos inside item */}
-                            {photos.length > 0 && (
-                              <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-3 gap-2 break-inside-avoid">
-                                {photos.map((photoUrl, pIdx) => {
-                                  const condomínioStr = headerData.cliente ? headerData.cliente.trim() : "Condomínio";
-                                  const dataStr = headerData.data ? new Date(headerData.data).toLocaleDateString('pt-BR') : "Data";
-                                  const photoNumStr = photos.length > 1 ? ` (Foto ${pIdx + 1})` : '';
-                                  const legendText = `Item ${act.code} - ${condomínioStr} - ${dataStr}${photoNumStr}`;
-
-                                  return (
-                                    <div key={pIdx} className="border border-slate-300 rounded overflow-hidden bg-slate-50 shadow-xs">
-                                      <img src={photoUrl} alt="Foto" className="w-full h-24 object-cover" />
-                                      <div className="p-1 text-[8px] font-mono text-slate-700 bg-slate-100 border-t border-slate-200 truncate">
-                                        {legendText}
+                                    return (
+                                      <div key={pIdx} className="border border-slate-300 rounded overflow-hidden bg-slate-50 shadow-xs">
+                                        <img src={photoUrl} alt="Foto" className="w-full h-24 object-cover" />
+                                        <div className="p-1 text-[8px] font-mono text-slate-700 bg-slate-100 border-t border-slate-200 truncate">
+                                          {legendText}
+                                        </div>
                                       </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
 
-            {/* Signatures Section */}
-            <div className="mt-6 pt-4 border-t-2 border-purple-900 break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-              <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 mb-4 text-center">
-                VALIDAÇÃO E ASSINATURAS DE RESPONSABILIDADE TÉCNICA — TKE
-              </h4>
+              {/* Signatures Section */}
+              <div className="mt-6 pt-4 border-t-2 border-purple-900 break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 mb-4 text-center">
+                  VALIDAÇÃO E ASSINATURAS DE RESPONSABILIDADE TÉCNICA — TKE
+                </h4>
 
-              <div className="grid grid-cols-3 gap-4 text-[10px]">
-                {/* Elaborado */}
-                <div className="border border-slate-300 p-2.5 rounded text-center">
-                  <div className="h-10 border-b border-slate-300 border-dashed mb-1.5 flex items-end justify-center pb-0.5 text-[9px] text-slate-400 italic">
-                    Assinatura do Técnico
+                <div className="grid grid-cols-3 gap-4 text-[10px]">
+                  {/* Elaborado */}
+                  <div className="border border-slate-300 p-2.5 rounded text-center">
+                    <div className="h-10 border-b border-slate-300 border-dashed mb-1.5 flex items-end justify-center pb-0.5 text-[9px] text-slate-400 italic">
+                      Assinatura do Técnico
+                    </div>
+                    <p className="font-bold text-slate-900">{signatures.elaborado?.nome || 'Elaborado por'}</p>
+                    <p className="text-slate-500">Técnico de Campo TKE</p>
+                    <p className="text-slate-400 text-[9px] mt-0.5">
+                      Data: {signatures.elaborado?.data ? new Date(signatures.elaborado.data).toLocaleDateString('pt-BR') : '-'}
+                    </p>
                   </div>
-                  <p className="font-bold text-slate-900">{signatures.elaborado.nome || 'Elaborado por'}</p>
-                  <p className="text-slate-500">Técnico de Campo TKE</p>
-                  <p className="text-slate-400 text-[9px] mt-0.5">
-                    Data: {signatures.elaborado.data ? new Date(signatures.elaborado.data).toLocaleDateString('pt-BR') : '-'}
-                  </p>
-                </div>
 
-                {/* Revisado */}
-                <div className="border border-slate-300 p-2.5 rounded text-center">
-                  <div className="h-10 border-b border-slate-300 border-dashed mb-1.5 flex items-end justify-center pb-0.5 text-[9px] text-slate-400 italic">
-                    Assinatura do Supervisor
+                  {/* Revisado */}
+                  <div className="border border-slate-300 p-2.5 rounded text-center">
+                    <div className="h-10 border-b border-slate-300 border-dashed mb-1.5 flex items-end justify-center pb-0.5 text-[9px] text-slate-400 italic">
+                      Assinatura do Supervisor
+                    </div>
+                    <p className="font-bold text-slate-900">{signatures.revisado?.nome || 'Revisado por'}</p>
+                    <p className="text-slate-500">Supervisão Técnica TKE</p>
+                    <p className="text-slate-400 text-[9px] mt-0.5">
+                      Data: {signatures.revisado?.data ? new Date(signatures.revisado.data).toLocaleDateString('pt-BR') : '-'}
+                    </p>
                   </div>
-                  <p className="font-bold text-slate-900">{signatures.revisado.nome || 'Revisado por'}</p>
-                  <p className="text-slate-500">Supervisão Técnica TKE</p>
-                  <p className="text-slate-400 text-[9px] mt-0.5">
-                    Data: {signatures.revisado.data ? new Date(signatures.revisado.data).toLocaleDateString('pt-BR') : '-'}
-                  </p>
-                </div>
 
-                {/* Aprovado */}
-                <div className="border border-slate-300 p-2.5 rounded text-center">
-                  <div className="h-10 border-b border-slate-300 border-dashed mb-1.5 flex items-end justify-center pb-0.5 text-[9px] text-slate-400 italic">
-                    Assinatura do Cliente
+                  {/* Aprovado */}
+                  <div className="border border-slate-300 p-2.5 rounded text-center">
+                    <div className="h-10 border-b border-slate-300 border-dashed mb-1.5 flex items-end justify-center pb-0.5 text-[9px] text-slate-400 italic">
+                      Assinatura do Cliente
+                    </div>
+                    <p className="font-bold text-slate-900">{signatures.aprovado?.nome || 'Aprovado por'}</p>
+                    <p className="text-slate-500">Cliente / Gerência</p>
+                    <p className="text-slate-400 text-[9px] mt-0.5">
+                      Data: {signatures.aprovado?.data ? new Date(signatures.aprovado.data).toLocaleDateString('pt-BR') : '-'}
+                    </p>
                   </div>
-                  <p className="font-bold text-slate-900">{signatures.aprovado.nome || 'Aprovado por'}</p>
-                  <p className="text-slate-500">Cliente / Gerência</p>
-                  <p className="text-slate-400 text-[9px] mt-0.5">
-                    Data: {signatures.aprovado.data ? new Date(signatures.aprovado.data).toLocaleDateString('pt-BR') : '-'}
-                  </p>
                 </div>
               </div>
-            </div>
 
-            {/* Document Footer */}
-            <div className="mt-6 pt-2 border-t border-slate-200 flex justify-between text-[9px] text-slate-400">
-              <span>TK Elevator - TITS-502P Relatório Fotográfico de Manutenção Preventiva</span>
-              <span>Página 1 de 1</span>
+              {/* Document Footer */}
+              <div className="mt-6 pt-2 border-t border-slate-200 flex justify-between text-[9px] text-slate-400">
+                <span>TK Elevator - TITS-502P Relatório Fotográfico de Manutenção Preventiva</span>
+                <span>Página 1 de 1</span>
+              </div>
             </div>
-          </div>
+          )}
+
         </div>
 
       </div>
