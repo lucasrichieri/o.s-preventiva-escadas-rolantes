@@ -20,7 +20,32 @@ async function buildJsPdfFromElement(element, filename = 'Relatorio_TKE.pdf') {
     throw new Error('Elemento DOM não fornecido para geração do PDF.');
   }
 
+  // Função auxiliar para converter cores oklch() para hex via Canvas 2D API
+  const convertOklchToHex = (oklchStr) => {
+    try {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = 1;
+      tempCanvas.height = 1;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.fillStyle = '#000000';
+        tempCtx.fillStyle = oklchStr;
+        return tempCtx.fillStyle;
+      }
+    } catch (_) {}
+    return '#6b7280';
+  };
+
+  // Regex para encontrar oklch(...) em CSS (incluindo com / alpha)
+  const oklchRegex = /oklch\([^)]*\)/gi;
+
+  // Substitui todas as ocorrências de oklch() em uma string CSS
+  const sanitizeCssText = (cssText) => {
+    return cssText.replace(oklchRegex, (match) => convertOklchToHex(match));
+  };
+
   // Captura o elemento com html2canvas em alta resolução (scale 2)
+  console.log('[TKE-PDF] html2canvas: iniciando captura do elemento...');
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
@@ -30,6 +55,9 @@ async function buildJsPdfFromElement(element, filename = 'Relatorio_TKE.pdf') {
     scrollX: 0,
     logging: false,
     imageTimeout: 15000,
+    ignoreElements: (el) => {
+      return el.classList?.contains('no-print') || el.tagName === 'NOSCRIPT';
+    },
     onclone: (clonedDoc, clonedElement) => {
       // Garante largura consistente e fundo branco
       clonedElement.style.maxWidth = '210mm';
@@ -37,6 +65,57 @@ async function buildJsPdfFromElement(element, filename = 'Relatorio_TKE.pdf') {
       clonedElement.style.boxShadow = 'none';
       clonedElement.style.margin = '0 auto';
       clonedElement.style.backgroundColor = '#ffffff';
+
+      // ===== CRÍTICO: Sanitizar TODAS as stylesheets do DOM clonado =====
+      // html2canvas faz parse interno das CSS rules e crasha em oklch()
+      const styleSheets = clonedDoc.querySelectorAll('style');
+      let sanitizedCount = 0;
+      styleSheets.forEach((styleEl) => {
+        try {
+          const originalCss = styleEl.textContent || '';
+          if (originalCss.includes('oklch')) {
+            styleEl.textContent = sanitizeCssText(originalCss);
+            sanitizedCount++;
+          }
+        } catch (_) {}
+      });
+
+      // Sanitizar <link> stylesheets convertendo-as em <style> inline
+      const linkSheets = clonedDoc.querySelectorAll('link[rel="stylesheet"]');
+      linkSheets.forEach((linkEl) => {
+        try {
+          // Tenta acessar as regras CSS do link
+          const sheets = Array.from(clonedDoc.styleSheets);
+          const matchSheet = sheets.find(s => s.ownerNode === linkEl);
+          if (matchSheet) {
+            let cssText = '';
+            try {
+              Array.from(matchSheet.cssRules).forEach(rule => {
+                cssText += rule.cssText + '\n';
+              });
+            } catch (_) { return; }
+            if (cssText.includes('oklch')) {
+              const newStyle = clonedDoc.createElement('style');
+              newStyle.textContent = sanitizeCssText(cssText);
+              linkEl.replaceWith(newStyle);
+              sanitizedCount++;
+            }
+          }
+        } catch (_) {}
+      });
+
+      // Sanitizar estilos inline dos elementos
+      const allElements = clonedDoc.querySelectorAll('*');
+      allElements.forEach((el) => {
+        try {
+          const inlineStyle = el.getAttribute('style') || '';
+          if (inlineStyle.includes('oklch')) {
+            el.setAttribute('style', sanitizeCssText(inlineStyle));
+          }
+        } catch (_) {}
+      });
+
+      console.log(`[TKE-PDF] onclone: ${sanitizedCount} stylesheets sanitizadas, ${allElements.length} elementos processados`);
     }
   });
 

@@ -98,10 +98,39 @@ export default function PdfExportModal({
     const pdfFilename = `Relatorio_TKE_${clienteSafe}_${nomeMes}.pdf`;
 
     try {
+      console.log('[TKE-PDF] Iniciando geração do PDF...', { element: printRef.current, filename: pdfFilename });
       const { generatePdfBase64 } = await import('../utils/pdfGenerator');
       pdfBase64 = await generatePdfBase64(printRef.current, pdfFilename);
+      console.log('[TKE-PDF] Resultado da geração:', { type: typeof pdfBase64, length: pdfBase64?.length || 0 });
     } catch (pdfErr) {
-      console.error('Erro ao gerar PDF para e-mail:', pdfErr);
+      console.error('[TKE-PDF] Exceção ao gerar PDF para e-mail:', pdfErr);
+      console.error('[TKE-PDF] Stack:', pdfErr?.stack);
+    }
+
+    if (!pdfBase64 || typeof pdfBase64 !== 'string' || pdfBase64.length < 500) {
+      console.warn('[TKE-PDF] PDF Base64 inválido. Tentando fallback com html2pdf.js...');
+      // Fallback: tentar gerar com html2pdf.js
+      try {
+        const html2pdf = (await import('html2pdf.js')).default;
+        const opt = {
+          margin: [6, 6, 6, 6],
+          filename: pdfFilename,
+          image: { type: 'jpeg', quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        const pdfBlob = await html2pdf().set(opt).from(printRef.current).outputPdf('blob');
+        // Converter Blob para Base64 Data URI
+        pdfBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(pdfBlob);
+        });
+        console.log('[TKE-PDF] Fallback html2pdf.js gerou PDF com sucesso:', pdfBase64?.length);
+      } catch (fallbackErr) {
+        console.error('[TKE-PDF] Fallback html2pdf.js também falhou:', fallbackErr);
+      }
     }
 
     if (!pdfBase64 || typeof pdfBase64 !== 'string' || pdfBase64.length < 500) {
