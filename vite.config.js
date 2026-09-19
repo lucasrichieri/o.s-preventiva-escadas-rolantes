@@ -62,10 +62,15 @@ function apiSendEmailDevPlugin() {
                   const isGmail = smtpHost.includes('gmail.com') || smtpUser.endsWith('@gmail.com');
                   const transportOptions = isGmail
                     ? {
-                        service: 'gmail',
+                        host: 'smtp.gmail.com',
+                        port: 465,
+                        secure: true,
                         auth: {
                           user: smtpUser,
                           pass: smtpPass
+                        },
+                        tls: {
+                          rejectUnauthorized: false
                         }
                       }
                     : {
@@ -123,6 +128,7 @@ function apiSendEmailDevPlugin() {
     .info-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
     .info-table td.label { font-weight: bold; color: #64748b; width: 40%; }
     .info-table td.val { color: #0f172a; font-weight: 600; }
+    .alert-box { background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px; font-size: 12px; color: #92400e; margin-bottom: 20px; }
     .pdf-banner { background: #fdf4ff; border: 1px dashed #c084fc; border-radius: 8px; padding: 14px; text-align: center; margin-top: 15px; }
     .pdf-banner p { margin: 0; font-size: 13px; color: #6b21a8; font-weight: bold; }
     .footer { background-color: #0f172a; color: #94a3b8; padding: 16px 24px; font-size: 11px; text-align: center; }
@@ -184,7 +190,7 @@ function apiSendEmailDevPlugin() {
 
       ${
         data['Não-Conformidades'] && data['Não-Conformidades'] !== 'Nenhuma detectada (equipamento 100% operacional)'
-          ? `<div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px; font-size: 12px; color: #92400e; margin-bottom: 20px;"><strong>⚠️ Observações / Não-Conformidades:</strong><br>${data['Não-Conformidades']}</div>`
+          ? `<div class="alert-box"><strong>⚠️ Observações / Não-Conformidades:</strong><br>${data['Não-Conformidades']}</div>`
           : ''
       }
 
@@ -212,7 +218,9 @@ function apiSendEmailDevPlugin() {
                   };
 
                   try {
+                    console.log(`📤 [Vite Dev] Disparando e-mail SMTP para ${targetEmail}...`);
                     const info = await transporter.sendMail(mailOptions);
+                    console.log('✅ [Vite Dev] E-mail enviado com sucesso:', info.messageId, info.response);
 
                     res.statusCode = 200;
                     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -220,28 +228,15 @@ function apiSendEmailDevPlugin() {
                       success: true,
                       messageId: info.messageId,
                       accepted: info.accepted,
+                      response: info.response,
                       message: `E-mail enviado com sucesso para ${targetEmail} com o PDF anexado!`
                     }));
                   } catch (sendErr) {
-                    console.error('Aviso no envio SMTP:', sendErr.message);
-                    // Se for credencial de demonstração ou erro de conexão de teste local
-                    if (sendErr.code === 'EAUTH' || sendErr.code === 'EDNS' || sendErr.code === 'ESOCKET' || (smtpUser && smtpUser.includes('tkelevator.com'))) {
-                      console.log('⚡ [Modo Demonstração TKE] E-mail processado e PDF anexado com sucesso para ambiente de teste.');
-                      res.statusCode = 200;
-                      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                      res.end(JSON.stringify({
-                        success: true,
-                        simulated: true,
-                        messageId: `<tke-dev-${Date.now()}@tkelevator.com>`,
-                        accepted: [targetEmail],
-                        message: `Relatório PDF processado e enviado com sucesso para ${targetEmail} (Disparo TKE)!`
-                      }));
-                      return;
-                    }
-
+                    console.error('❌ [Vite Dev] Erro no envio SMTP:', sendErr);
                     res.statusCode = 500;
                     res.setHeader('Content-Type', 'application/json; charset=utf-8');
                     res.end(JSON.stringify({
+                      success: false,
                       error: sendErr.message || 'Falha ao enviar e-mail via servidor SMTP.',
                       code: sendErr.code || 'SMTP_ERROR'
                     }));

@@ -1,13 +1,22 @@
 /**
  * API Serverless / Backend: /api/send-email
- * Processa o envio de e-mail via SMTP (Nodemailer) com anexo do relatório PDF gerado pelo sistema
+ * Processa o envio de e-mail real via SMTP (Nodemailer) com anexo do relatório PDF gerado pelo sistema
  */
 
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
-// Carregar variáveis de ambiente em tempo de execução
+// Carregar variáveis de ambiente locais (se houver)
 dotenv.config();
+
+function cleanEnvValue(val) {
+  if (!val) return '';
+  let s = String(val).trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
 
 export default async function handler(req, res) {
   // Configuração CORS
@@ -29,7 +38,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        body = {};
+      }
+    } else if (Buffer.isBuffer(body)) {
+      try {
+        body = JSON.parse(body.toString('utf-8'));
+      } catch (e) {
+        body = {};
+      }
+    }
+    body = body || {};
+
     const {
       toEmail,
       subject,
@@ -39,36 +63,47 @@ export default async function handler(req, res) {
       data = {}
     } = body;
 
-    const targetEmail = toEmail || process.env.SMTP_TO_DEFAULT;
+    // Sanitização e resolução de credenciais SMTP
+    const smtpHost = cleanEnvValue(process.env.SMTP_HOST) || 'smtp.gmail.com';
+    const smtpPort = parseInt(cleanEnvValue(process.env.SMTP_PORT) || '465', 10);
+    const smtpSecure = cleanEnvValue(process.env.SMTP_SECURE) === 'true' || smtpPort === 465;
+    const smtpUser = cleanEnvValue(process.env.SMTP_USER);
+    // Senha de aplicativo do Gmail não deve conter espaços
+    const smtpPass = cleanEnvValue(process.env.SMTP_PASS).replace(/\s+/g, '');
+    const defaultTo = cleanEnvValue(process.env.SMTP_TO_DEFAULT);
+    const smtpFrom = cleanEnvValue(process.env.SMTP_FROM) || (smtpUser ? `TK Elevator <${smtpUser}>` : 'TK Elevator <noreply@tkelevator.com>');
+
+    const targetEmail = (toEmail && String(toEmail).trim()) || defaultTo;
 
     if (!targetEmail) {
       return res.status(400).json({
-        error: 'E-mail de destino não informado e SMTP_TO_DEFAULT não configurado no .env.'
+        success: false,
+        error: 'E-mail de destino não informado e SMTP_TO_DEFAULT não configurado.'
       });
     }
-
-    // Validação de credenciais SMTP
-    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
-    const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
-    const smtpUser = process.env.SMTP_USER ? process.env.SMTP_USER.trim() : '';
-    const smtpPass = process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '') : '';
-    const smtpFrom = process.env.SMTP_FROM || (smtpUser ? `TK Elevator <${smtpUser}>` : 'TK Elevator <noreply@tkelevator.com>');
 
     if (!smtpUser || !smtpPass) {
       return res.status(500).json({
-        error: 'Servidor SMTP não configurado. Por favor, defina SMTP_USER e SMTP_PASS no arquivo .env do sistema.'
+        success: false,
+        error: 'Servidor SMTP não configurado. Por favor, defina SMTP_USER e SMTP_PASS nas variáveis de ambiente do sistema.'
       });
     }
 
-    // Configurar transporte SMTP com Nodemailer
+    // Configurar transporte SMTP
     const isGmail = smtpHost.includes('gmail.com') || smtpUser.endsWith('@gmail.com');
     const transportOptions = isGmail
       ? {
-          service: 'gmail',
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
           auth: {
             user: smtpUser,
             pass: smtpPass
+          },
+          pool: false,
+          maxConnections: 1,
+          tls: {
+            rejectUnauthorized: false
           }
         }
       : {
@@ -128,12 +163,6 @@ export default async function handler(req, res) {
     .info-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
     .info-table td.label { font-weight: bold; color: #64748b; width: 40%; }
     .info-table td.val { color: #0f172a; font-weight: 600; }
-    .stats-box { display: flex; gap: 10px; margin-bottom: 20px; text-align: center; }
-    .stat-card { flex: 1; padding: 12px; border-radius: 8px; font-size: 12px; }
-    .stat-conforme { background-color: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
-    .stat-nao-conforme { background-color: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
-    .stat-nao-aplica { background-color: #f8fafc; border: 1px solid #e2e8f0; color: #475569; }
-    .stat-num { font-size: 18px; font-weight: 800; display: block; margin-top: 4px; }
     .alert-box { background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px; font-size: 12px; color: #92400e; margin-bottom: 20px; }
     .pdf-banner { background: #fdf4ff; border: 1px dashed #c084fc; border-radius: 8px; padding: 14px; text-align: center; margin-top: 15px; }
     .pdf-banner p { margin: 0; font-size: 13px; color: #6b21a8; font-weight: bold; }
@@ -214,7 +243,7 @@ export default async function handler(req, res) {
 </html>
     `.trim();
 
-    // Disparo do e-mail com Nodemailer
+    // Disparo real do e-mail com Nodemailer
     const mailOptions = {
       from: smtpFrom,
       to: targetEmail,
@@ -224,31 +253,21 @@ export default async function handler(req, res) {
       attachments: attachments
     };
 
-    try {
-      const info = await transporter.sendMail(mailOptions);
+    console.log(`📤 Enviando e-mail para ${targetEmail} via ${smtpHost}:${smtpPort}...`);
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ E-mail enviado com sucesso:', info.messageId, info.response);
 
-      return res.status(200).json({
-        success: true,
-        messageId: info.messageId,
-        accepted: info.accepted,
-        response: info.response,
-        message: `E-mail enviado com sucesso para ${targetEmail} com o PDF anexado!`
-      });
-    } catch (sendErr) {
-      if (sendErr.code === 'EAUTH' || sendErr.code === 'EDNS' || (smtpUser && smtpUser.includes('tkelevator.com'))) {
-        return res.status(200).json({
-          success: true,
-          simulated: true,
-          messageId: `<tke-${Date.now()}@tkelevator.com>`,
-          accepted: [targetEmail],
-          message: `Relatório PDF processado e enviado com sucesso para ${targetEmail} (Disparo TKE)!`
-        });
-      }
-      throw sendErr;
-    }
+    return res.status(200).json({
+      success: true,
+      messageId: info.messageId,
+      accepted: info.accepted,
+      response: info.response,
+      message: `E-mail enviado com sucesso para ${targetEmail} com o PDF anexado!`
+    });
   } catch (error) {
-    console.error('Erro no envio de e-mail SMTP (Nodemailer):', error);
+    console.error('❌ Erro no envio de e-mail SMTP:', error);
     return res.status(500).json({
+      success: false,
       error: error.message || 'Falha ao conectar ou enviar via servidor SMTP.',
       code: error.code || 'SMTP_ERROR'
     });
