@@ -1,6 +1,6 @@
 /**
  * API Serverless / Backend: /api/send-email
- * Processa o envio de e-mail real via SMTP (Nodemailer) com anexo do relatório PDF gerado pelo sistema
+ * Suporta Resend API (Nuvem / Vercel nativo) e SMTP (Nodemailer) com anexo do relatório PDF
  */
 
 import nodemailer from 'nodemailer';
@@ -63,84 +63,28 @@ export default async function handler(req, res) {
       data = {}
     } = body;
 
-    // Sanitização e resolução de credenciais SMTP
-    const smtpHost = cleanEnvValue(process.env.SMTP_HOST) || 'smtp.gmail.com';
-    const smtpPort = parseInt(cleanEnvValue(process.env.SMTP_PORT) || '465', 10);
-    const smtpSecure = cleanEnvValue(process.env.SMTP_SECURE) === 'true' || smtpPort === 465;
-    const smtpUser = cleanEnvValue(process.env.SMTP_USER);
-    // Senha de aplicativo do Gmail não deve conter espaços
-    const smtpPass = cleanEnvValue(process.env.SMTP_PASS).replace(/\s+/g, '');
-    const defaultTo = cleanEnvValue(process.env.SMTP_TO_DEFAULT);
-    const smtpFrom = cleanEnvValue(process.env.SMTP_FROM) || (smtpUser ? `TK Elevator <${smtpUser}>` : 'TK Elevator <noreply@tkelevator.com>');
-
+    const resendApiKey = cleanEnvValue(process.env.RESEND_API_KEY);
+    const defaultTo = cleanEnvValue(process.env.SMTP_TO_DEFAULT) || cleanEnvValue(process.env.RESEND_TO_DEFAULT);
     const targetEmail = (toEmail && String(toEmail).trim()) || defaultTo;
 
     if (!targetEmail) {
       return res.status(400).json({
         success: false,
-        error: 'E-mail de destino não informado e SMTP_TO_DEFAULT não configurado.'
+        error: 'E-mail de destino não informado.'
       });
     }
 
-    if (!smtpUser || !smtpPass) {
-      return res.status(500).json({
-        success: false,
-        error: 'Servidor SMTP não configurado. Por favor, defina SMTP_USER e SMTP_PASS nas variáveis de ambiente do sistema.'
-      });
-    }
-
-    // Configurar transporte SMTP
-    const isGmail = smtpHost.includes('gmail.com') || smtpUser.endsWith('@gmail.com');
-    const transportOptions = isGmail
-      ? {
-          host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
-          auth: {
-            user: smtpUser,
-            pass: smtpPass
-          },
-          pool: false,
-          maxConnections: 1,
-          tls: {
-            rejectUnauthorized: false
-          }
-        }
-      : {
-          host: smtpHost,
-          port: smtpPort,
-          secure: smtpSecure,
-          auth: {
-            user: smtpUser,
-            pass: smtpPass
-          },
-          tls: {
-            rejectUnauthorized: false
-          }
-        };
-
-    const transporter = nodemailer.createTransport(transportOptions);
-
-    // Preparar anexo do PDF se fornecido em Base64
-    const attachments = [];
+    // Preparar dados do anexo PDF
+    let cleanBase64 = '';
+    let pdfBuffer = null;
     if (pdfBase64 && typeof pdfBase64 === 'string') {
-      const cleanBase64 = pdfBase64.includes('base64,')
+      cleanBase64 = pdfBase64.includes('base64,')
         ? pdfBase64.split('base64,')[1].trim()
         : pdfBase64.trim();
 
       if (cleanBase64.length > 0) {
-        const pdfBuffer = Buffer.from(cleanBase64, 'base64');
-        attachments.push({
-          filename: pdfFilename || 'Relatorio_TKE_Manutencao_Preventiva.pdf',
-          content: pdfBuffer,
-          contentType: 'application/pdf'
-        });
-        console.log(`📎 Anexo PDF preparado: ${pdfFilename} (${(pdfBuffer.length / 1024).toFixed(1)} KB)`);
-      } else {
-        console.warn('⚠️ Base64 do PDF vazio após limpeza.');
+        pdfBuffer = Buffer.from(cleanBase64, 'base64');
       }
-    } else {
-      console.warn('⚠️ Requisição recebida sem pdfBase64.');
     }
 
     // Construção do template HTML corporativo TKE
@@ -243,7 +187,106 @@ export default async function handler(req, res) {
 </html>
     `.trim();
 
-    // Disparo real do e-mail com Nodemailer
+    // 1. DISPARO VIA RESEND API (Preferencial para Nuvem/Vercel)
+    if (resendApiKey) {
+      console.log(`📤 Disparando e-mail via Resend API para ${targetEmail}...`);
+      const resendFrom = cleanEnvValue(process.env.RESEND_FROM) || 'TK Elevator <onboarding@resend.dev>';
+      
+      const resendPayload = {
+        from: resendFrom,
+        to: [targetEmail],
+        subject: defaultSubject,
+        html: htmlBody,
+        text: text || `Relatório de Manutenção Preventiva TITS-502P em anexo.\nCliente: ${data['Cliente / Condomínio'] || '-'}\nEquipamento: ${data['Equipamento (Tag / Série)'] || '-'}`,
+        attachments: cleanBase64 ? [
+          {
+            filename: pdfFilename,
+            content: cleanBase64
+          }
+        ] : []
+      };
+
+      const resendRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(resendPayload)
+      });
+
+      const resendData = await resendRes.json();
+
+      if (!resendRes.ok || resendData.error) {
+        console.error('❌ Erro na API do Resend:', resendData);
+        throw new Error(resendData.error?.message || resendData.message || 'Falha no envio via Resend API.');
+      }
+
+      console.log('✅ E-mail enviado com sucesso via Resend:', resendData.id);
+      return res.status(200).json({
+        success: true,
+        method: 'resend',
+        messageId: resendData.id,
+        accepted: [targetEmail],
+        message: `E-mail enviado com sucesso para ${targetEmail} com o PDF anexado via Resend!`
+      });
+    }
+
+    // 2. DISPARO VIA SMTP (Nodemailer - Fallback)
+    const smtpHost = cleanEnvValue(process.env.SMTP_HOST) || 'smtp.gmail.com';
+    const smtpPort = parseInt(cleanEnvValue(process.env.SMTP_PORT) || '465', 10);
+    const smtpSecure = cleanEnvValue(process.env.SMTP_SECURE) === 'true' || smtpPort === 465;
+    const smtpUser = cleanEnvValue(process.env.SMTP_USER);
+    const smtpPass = cleanEnvValue(process.env.SMTP_PASS).replace(/\s+/g, '');
+    const smtpFrom = cleanEnvValue(process.env.SMTP_FROM) || (smtpUser ? `TK Elevator <${smtpUser}>` : 'TK Elevator <noreply@tkelevator.com>');
+
+    if (!smtpUser || !smtpPass) {
+      return res.status(500).json({
+        success: false,
+        error: 'Nenhum serviço de envio configurado. Defina RESEND_API_KEY ou SMTP_USER/SMTP_PASS no Vercel.'
+      });
+    }
+
+    const isGmail = smtpHost.includes('gmail.com') || smtpUser.endsWith('@gmail.com');
+    const transportOptions = isGmail
+      ? {
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          },
+          pool: false,
+          maxConnections: 1,
+          tls: {
+            rejectUnauthorized: false
+          }
+        }
+      : {
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpSecure,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          },
+          tls: {
+            rejectUnauthorized: false
+          }
+        };
+
+    const transporter = nodemailer.createTransport(transportOptions);
+
+    const attachments = [];
+    if (pdfBuffer) {
+      attachments.push({
+        filename: pdfFilename,
+        content: pdfBuffer,
+        contentType: 'application/pdf'
+      });
+    }
+
     const mailOptions = {
       from: smtpFrom,
       to: targetEmail,
@@ -253,23 +296,24 @@ export default async function handler(req, res) {
       attachments: attachments
     };
 
-    console.log(`📤 Enviando e-mail para ${targetEmail} via ${smtpHost}:${smtpPort}...`);
+    console.log(`📤 Enviando e-mail para ${targetEmail} via SMTP ${smtpHost}:${smtpPort}...`);
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ E-mail enviado com sucesso:', info.messageId, info.response);
+    console.log('✅ E-mail enviado com sucesso via SMTP:', info.messageId, info.response);
 
     return res.status(200).json({
       success: true,
+      method: 'smtp',
       messageId: info.messageId,
       accepted: info.accepted,
       response: info.response,
       message: `E-mail enviado com sucesso para ${targetEmail} com o PDF anexado!`
     });
   } catch (error) {
-    console.error('❌ Erro no envio de e-mail SMTP:', error);
+    console.error('❌ Erro no envio de e-mail:', error);
     return res.status(500).json({
       success: false,
-      error: error.message || 'Falha ao conectar ou enviar via servidor SMTP.',
-      code: error.code || 'SMTP_ERROR'
+      error: error.message || 'Falha ao conectar ou enviar e-mail.',
+      code: error.code || 'SEND_ERROR'
     });
   }
 }
