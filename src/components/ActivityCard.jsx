@@ -1,9 +1,13 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { compressImage } from '../utils/imageCompressor';
-import { Camera, Trash2, Check, X, Minus, ImagePlus, MessageSquare } from 'lucide-react';
+import { Camera, Trash2, Check, X, Minus, ImagePlus, MessageSquare, Video } from 'lucide-react';
+import CameraCaptureModal from './CameraCaptureModal';
 
 export default function ActivityCard({ activity, itemState, onItemChange, clienteName, dataManutencao }) {
   const fileInputRef = useRef(null);
+  const nativeCameraInputRef = useRef(null);
+
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
 
   const status = itemState?.status || 'Conforme';
   const comment = itemState?.comment || '';
@@ -17,6 +21,7 @@ export default function ActivityCard({ activity, itemState, onItemChange, client
     onItemChange(activity.id, { ...itemState, comment: e.target.value });
   };
 
+  // Upload de arquivos da galeria / explorador de arquivos
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -30,7 +35,19 @@ export default function ActivityCard({ activity, itemState, onItemChange, client
       });
     } catch (err) {
       console.error("Erro ao comprimir foto:", err);
+    } finally {
+      // Limpar input para permitir selecionar o mesmo arquivo novamente se necessário
+      e.target.value = '';
     }
+  };
+
+  // Receber foto capturada pelo CameraCaptureModal
+  const handleCameraCapture = (photoBase64) => {
+    if (!photoBase64) return;
+    onItemChange(activity.id, {
+      ...itemState,
+      photos: [...photos, photoBase64]
+    });
   };
 
   const handleRemovePhoto = (index) => {
@@ -38,7 +55,7 @@ export default function ActivityCard({ activity, itemState, onItemChange, client
     onItemChange(activity.id, { ...itemState, photos: updated });
   };
 
-  // Automatic photo legend generator
+  // Gerador automático de legenda fotográfica para relatório TITS-502P
   const getPhotoLegend = (photoIndex) => {
     const condomínioStr = clienteName ? clienteName.trim() : "[Condomínio]";
     const dataStr = dataManutencao ? new Date(dataManutencao).toLocaleDateString('pt-BR') : "[Data]";
@@ -55,6 +72,15 @@ export default function ActivityCard({ activity, itemState, onItemChange, client
         : 'border-slate-200 bg-slate-50/70'
     } p-4 sm:p-5 mb-4`}>
       
+      {/* Modal de Câmera / Webcam ao Vivo */}
+      <CameraCaptureModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onCapture={handleCameraCapture}
+        itemCode={activity.code}
+        itemDescription={activity.description}
+      />
+
       <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-3">
         <div className="flex items-start gap-3">
           <span className="bg-purple-100 text-purple-900 border border-purple-300 font-mono font-black text-xs px-2.5 py-1 rounded-lg shrink-0 mt-0.5 shadow-xs">
@@ -144,27 +170,52 @@ export default function ActivityCard({ activity, itemState, onItemChange, client
 
       {/* Photos Attachment & Gallery Section */}
       <div className="mt-3.5 pt-3 border-t border-slate-200">
-        <div className="flex justify-between items-center mb-2">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
           <span className="text-xs text-slate-800 font-bold flex items-center gap-1.5">
             <Camera className="w-3.5 h-3.5 text-orange-600" />
             Fotos Anexadas ({photos.length})
           </span>
 
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-900 px-3 py-1.5 rounded-lg border border-purple-300 transition-all cursor-pointer shadow-xs"
-          >
-            <ImagePlus className="w-3.5 h-3.5 text-orange-600" />
-            Anexar Foto
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Opção 1: Abrir Câmera / Webcam ao Vivo */}
+            <button
+              type="button"
+              onClick={() => setIsCameraModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-extrabold bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white px-3 py-1.5 rounded-lg transition-all cursor-pointer shadow-sm shadow-orange-950/20"
+              title="Abrir Câmera do Celular ou Webcam do Notebook"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Tirar Foto
+            </button>
 
+            {/* Opção 2: Anexar da Galeria / Arquivos */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-900 px-3 py-1.5 rounded-lg border border-purple-300 transition-all cursor-pointer shadow-xs"
+              title="Selecionar foto salva do dispositivo ou galeria"
+            >
+              <ImagePlus className="w-3.5 h-3.5 text-purple-700" />
+              Galeria
+            </button>
+          </div>
+
+          {/* Inputs de arquivo ocultos */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handlePhotoUpload}
             accept="image/*"
             multiple
+            className="hidden"
+          />
+
+          <input
+            type="file"
+            ref={nativeCameraInputRef}
+            onChange={handlePhotoUpload}
+            accept="image/*"
+            capture="environment"
             className="hidden"
           />
         </div>
@@ -195,7 +246,7 @@ export default function ActivityCard({ activity, itemState, onItemChange, client
           </div>
         ) : (
           <p className="text-[11px] text-slate-400 italic mt-1 font-medium">
-            Nenhuma foto anexada a este item ainda.
+            Nenhuma foto anexada a este item ainda. Clique em <strong>"Tirar Foto"</strong> para usar a câmera/webcam ou <strong>"Galeria"</strong> para selecionar arquivos.
           </p>
         )}
       </div>
